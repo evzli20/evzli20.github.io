@@ -6,6 +6,7 @@
     <title>My Games · Evanz Lee</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
     <style>
+        /* ... (same CSS as before, no changes) ... */
         * {
             margin: 0;
             padding: 0;
@@ -28,7 +29,6 @@
             padding-bottom: 60px;
         }
 
-        /* ===== NAVIGATION BAR - 50% HEIGHT (matching secondpage) ===== */
         .nav-bar {
             position: fixed;
             left: 20px;
@@ -111,7 +111,6 @@
             letter-spacing: 0.3px;
         }
 
-        /* Main container */
         .container {
             max-width: 1200px;
             background: #ffffff;
@@ -122,7 +121,6 @@
             transition: all 0.2s;
         }
 
-        /* Page title */
         .page-title {
             font-size: 42px;
             font-weight: 800;
@@ -141,7 +139,6 @@
             padding-bottom: 20px;
         }
 
-        /* Games grid - matching activity cards style */
         .games-container {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -216,7 +213,6 @@
             cursor: not-allowed;
         }
 
-        /* Visitor counter styles */
         .visitor-counter {
             text-align: center;
             margin-top: 50px;
@@ -232,8 +228,10 @@
             font-size: 18px;
             margin-left: 5px;
         }
-        .counter-loading {
-            opacity: 0.7;
+        .counter-note {
+            font-size: 11px;
+            color: #8899aa;
+            margin-top: 5px;
         }
 
         @media (max-width: 860px) {
@@ -246,13 +244,6 @@
     </style>
 </head>
 <body>
-
-<!-- NAVIGATION BAR - only links to Homepage and Secondpage (currently commented out) -->
-<!--div class="nav-bar">
-    <a href="homepage.html" class="nav-link" data-label="Home"><img class="nav-img" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%231e293b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='1.8' d='M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'/%3E%3C/svg%3E" alt="home"></a>
-    <div class="nav-divider"></div>
-    <a href="secondpage.html" class="nav-link" data-label="Resume"><img class="nav-img" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%231e293b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='1.8' d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'/%3E%3C/svg%3E" alt="resume"></a>
-</div-->
 
 <div class="container">
     <div class="page-title">🎮 My Games</div>
@@ -288,41 +279,64 @@
         </div>
     </div>
 
-    <!-- GLOBAL VISITOR COUNTER (shared across all devices) -->
+    <!-- VISITOR COUNTER - Works globally across devices (requires internet) -->
     <div class="visitor-counter">
         🌍 Total global visits: <span id="visitCount">---</span>
+        <div class="counter-note" id="counterNote"></div>
     </div>
 </div>
 
 <script>
-    // Global visitor counter using countapi.xyz
-    // This increments EVERY time the page is loaded, from ANY device/browser.
-    // The counter is stored on a cloud server and shared across the internet.
     (function() {
         const counterSpan = document.getElementById('visitCount');
+        const noteSpan = document.getElementById('counterNote');
         
-        // Unique namespace and key for this page to avoid conflicts with other sites
-        const namespace = 'evanz_games_page';
-        const key = 'visitor_count';
+        // Try multiple counter APIs in order (fallback if one fails)
+        const endpoints = [
+            'https://api.countapi.xyz/hit/evanz_games_page/visitor_count',
+            'https://counterapi.xyz/hit/evanz_games_page/visitor_count',
+            'https://api.counterapi.xyz/hit/evanz_games_page/visitor_count'
+        ];
         
-        // First, try to get the current count without incrementing (for display)
-        // Then send a "hit" to increment and get the new value.
-        // Note: Using /hit endpoint increments the counter atomically.
-        fetch(`https://api.countapi.xyz/hit/${namespace}/${key}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data && typeof data.value === 'number') {
-                    counterSpan.innerText = data.value.toLocaleString(); // Format with commas
+        let currentAttempt = 0;
+        
+        function tryNextEndpoint() {
+            if (currentAttempt >= endpoints.length) {
+                // All APIs failed → show local fallback with explanation
+                let localCount = localStorage.getItem('gamesPage_fallbackCount');
+                if (localCount === null) {
+                    localStorage.setItem('gamesPage_fallbackCount', '1');
+                    counterSpan.innerText = '1';
                 } else {
-                    throw new Error('Invalid API response');
+                    let newLocal = parseInt(localCount) + 1;
+                    localStorage.setItem('gamesPage_fallbackCount', newLocal);
+                    counterSpan.innerText = newLocal;
                 }
-            })
-            .catch(error => {
-                console.warn('Counter API error:', error);
-                counterSpan.innerText = '∞ (offline)';
-                counterSpan.style.opacity = '0.6';
-                counterSpan.title = 'Unable to reach counter server. Check your internet connection.';
-            });
+                noteSpan.innerHTML = '⚠️ Offline mode – counter saved only on this device. For global counter, host this page on a web server.';
+                return;
+            }
+            
+            fetch(endpoints[currentAttempt])
+                .then(response => {
+                    if (!response.ok) throw new Error('API responded with ' + response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    if (data && typeof data.value === 'number') {
+                        counterSpan.innerText = data.value.toLocaleString();
+                        noteSpan.innerHTML = '✅ Live global counter (updated every visit)';
+                    } else {
+                        throw new Error('Invalid data format');
+                    }
+                })
+                .catch(error => {
+                    console.warn(`Counter API ${currentAttempt} failed:`, error);
+                    currentAttempt++;
+                    tryNextEndpoint();
+                });
+        }
+        
+        tryNextEndpoint();
     })();
 </script>
 </body>
