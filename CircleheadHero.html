@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>⚔️ CIRCLEHEAD HERO | AUTO SPELLS | DOOR COLLECTS COINS</title>
+    <style>
+        * {
+            user-select: none;
+            touch-action: manipulation;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(145deg, #0a120e 0%, #142116 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            position: relative;
+        }
+
+        .home-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(145deg, #0a120e 0%, #0a1a0f 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .home-content {
+            background: #1d2e24;
+            border-radius: 60px;
+            padding: 30px 40px;
+            text-align: center;
+            box-shadow: 0 25px 40px rgba(0,0,0,0.6);
+            border: 2px solid #56855a;
+            max-width: 650px;
+            width: 100%;
+        }
+
+        .home-content h1 { font-size: 42px; margin: 0 0 10px; color: #f5b042; text-shadow: 2px 2px 0 #aa7230; }
+        .home-content p { color: #bdd6b0; margin-bottom: 20px; font-size: 13px; }
+
+        .mode-buttons { display: flex; gap: 15px; justify-content: center; margin-bottom: 25px; flex-wrap: wrap; }
+        .mode-btn { background: #2d4936; border: 2px solid #6f9a6a; color: white; padding: 10px 25px; font-size: 16px; font-weight: bold; border-radius: 60px; cursor: pointer; transition: 0.1s; }
+        .mode-btn:hover { transform: scale(1.05); background: #3a5e4a; }
+        .mode-btn.selected { background: #d9a13b; border-color: #ffdd88; color: #1a1a1a; }
+
+        .shop-section { background: #0f1f17; border-radius: 40px; padding: 15px; margin: 20px 0; border: 1px solid #6f9a6a; }
+        .shop-section h3 { color: #d4af37; margin: 0 0 15px 0; font-size: 20px; }
+
+        .role-option {
+            background: #2d4936;
+            margin: 8px 0;
+            padding: 10px 15px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: 0.1s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .role-option:hover { background: #3e6e4a; transform: scale(1.01); }
+        .role-name { font-size: 18px; font-weight: bold; }
+        .role-desc { font-size: 11px; color: #bdd6b0; }
+        .role-price { color: #ffdd88; font-weight: bold; }
+        .owned-badge { background: #4a9e4a; padding: 4px 12px; border-radius: 30px; font-size: 12px; }
+
+        .start-btn { background: #4a9e4a; border: none; color: white; padding: 12px 35px; font-size: 20px; font-weight: bold; border-radius: 60px; cursor: pointer; margin-top: 10px; }
+        .start-btn:hover { transform: scale(1.05); background: #5ebe5e; }
+
+        .game-container { max-width: 100%; margin: 0 auto; padding: 0 16px; transition: all 0.3s ease; }
+        .game-wrapper { background: #1d2e24; border-radius: 48px; padding: 20px 24px 28px; box-shadow: 0 25px 40px rgba(0,0,0,0.6); border: 1px solid #56855a; position: relative; }
+        .room-badge { position: absolute; top: -12px; left: 20px; background: #d9a13b; color: #1a1a1a; padding: 4px 16px; border-radius: 30px; font-size: 13px; font-weight: bold; z-index: 10; }
+
+        .grid {
+            display: grid;
+            gap: 5px;
+            background: #253d2a;
+            padding: 10px;
+            border-radius: 36px;
+            justify-content: center;
+            margin: 0 auto;
+            transition: all 0.3s ease;
+        }
+        .grid.grid7 { grid-template-columns: repeat(7, 64px); grid-template-rows: repeat(7, 64px); }
+        .grid.grid9 { grid-template-columns: repeat(9, 56px); grid-template-rows: repeat(9, 56px); gap: 4px; }
+
+        .cell {
+            background: #2d6a3b;
+            border-radius: 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.06s linear;
+            box-shadow: inset 0 -3px 0 #1a4823;
+            color: white;
+            text-shadow: 1px 2px 0 #1f3b21;
+            position: relative;
+        }
+        .cell:active { transform: scale(0.96); }
+        .cell.player { background: #f5b042; box-shadow: 0 0 0 2px #ffe1a0; text-shadow: none; color: #2c2c2c; }
+        .cell.enemy { background: #b1453a; cursor: pointer; }
+        .cell.boss { background: #8b0000; cursor: pointer; box-shadow: 0 0 15px rgba(255,0,0,0.5); animation: bossPulse 1s infinite; }
+        @keyframes bossPulse { 0% { box-shadow: 0 0 5px rgba(255,0,0,0.5); } 50% { box-shadow: 0 0 20px rgba(255,0,0,0.9); } 100% { box-shadow: 0 0 5px rgba(255,0,0,0.5); } }
+        .cell.weapon { background: #5f8ab6; }
+        .cell.potion { background: #b86f9e; }
+        .cell.damage-cube { background: #ff884d; animation: cubePulse 1s infinite; }
+        @keyframes cubePulse { 0% { box-shadow: 0 0 0 0 #ffaa66; } 70% { box-shadow: 0 0 0 8px #ffaa6644; } 100% { box-shadow: 0 0 0 0 #ffaa66; } }
+        .cell.coin { background: #d4af37; animation: coinPulse 1s infinite; }
+        @keyframes coinPulse { 0% { box-shadow: 0 0 0 0 #ffdd88; } 70% { box-shadow: 0 0 0 8px #ffdd8844; } 100% { box-shadow: 0 0 0 0 #ffdd88; } }
+        .cell.door { background: #8b6b42; animation: doorPulse 1.5s infinite; }
+        @keyframes doorPulse { 0% { box-shadow: 0 0 0 0 #ffdd88; } 70% { box-shadow: 0 0 0 8px #ffdd8844; } 100% { box-shadow: 0 0 0 0 #ffdd88; } }
+        .cell.wall { background: #2e4630; cursor: default; }
+        .cell.empty-tile { background: #3a8a4a; }
+
+        .enemy-hp { font-size: 10px; background: #1a1a1acc; border-radius: 20px; padding: 2px 5px; margin-top: 2px; font-weight: bold; color: #ffcc88; }
+        .item-name-on-ground { font-size: 8px; background: #000000aa; border-radius: 10px; padding: 2px 4px; margin-top: 2px; white-space: nowrap; }
+
+        .info-panel {
+            margin-top: 20px;
+            background: #0f1f17;
+            border-radius: 60px;
+            padding: 12px 18px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            border: 1px solid #678f62;
+        }
+        .stats { display: flex; gap: 18px; background: #1e3525; padding: 5px 16px; border-radius: 60px; font-weight: bold; font-size: 1rem; }
+        .stat { display: flex; align-items: center; gap: 6px; }
+        #hpValue, #currentWeaponLabel, #damageBonusValue, #coinValue { color: white; font-weight: bold; }
+
+        .inventory-slots { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        .inv-slot {
+            background: #1e3327;
+            width: 70px;
+            height: 74px;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            font-weight: bold;
+            border: 2px solid #6f9a6a;
+            cursor: pointer;
+            position: relative;
+        }
+        .inv-slot.empty { opacity: 0.6; border: 2px dashed #547a4e; }
+        .slot-dmg, .slot-potion-heal, .slot-cube-effect { font-size: 9px; background: #000000bb; border-radius: 12px; padding: 2px 4px; margin-top: 4px; }
+        .slot-name { font-size: 7px; background: #00000099; border-radius: 10px; padding: 1px 4px; margin-top: 2px; max-width: 62px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .drop-icon { position: absolute; bottom: -8px; right: -8px; background: #ff4444cc; color: white; font-size: 10px; border-radius: 20px; padding: 2px 6px; cursor: pointer; z-index: 5; }
+
+        .bow-status { background: #2d4936; padding: 4px 12px; border-radius: 40px; font-size: 0.7rem; font-weight: bold; color: #ffdd99; }
+        .message-box { background: #030e08cc; padding: 5px 14px; border-radius: 32px; font-size: 0.7rem; color: #f7f7cf; min-width: 160px; text-align: center; }
+        button { background: #d9a13b; border: none; font-weight: bold; padding: 5px 15px; border-radius: 60px; font-family: monospace; font-size: 0.85rem; cursor: pointer; }
+        .next-room-btn { background: #4a9e4a; color: white; }
+        .next-room-btn.disabled { background: #555; cursor: not-allowed; opacity: 0.6; }
+
+        .arrow-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1000; }
+        .spacebar-hint { position: fixed; bottom: 15px; right: 20px; background: #000000aa; color: #ffdd88; padding: 6px 12px; border-radius: 30px; font-size: 11px; pointer-events: none; }
+
+        .game-over-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .game-over-content { background: linear-gradient(145deg, #2a1a1a, #1a0f0f); border: 3px solid #b1453a; border-radius: 60px; padding: 40px 60px; text-align: center; }
+        .game-over-content h1 { font-size: 64px; margin: 0; color: #ff6655; }
+
+        @media (max-width: 800px) {
+            .grid.grid7 { grid-template-columns: repeat(7, minmax(45px, 55px)); grid-template-rows: repeat(7, minmax(45px, 55px)); }
+            .grid.grid9 { grid-template-columns: repeat(9, 42px); grid-template-rows: repeat(9, 42px); gap: 3px; }
+            .inv-slot { width: 55px; height: 58px; font-size: 22px; }
+            .home-content { padding: 20px; }
+            .home-content h1 { font-size: 32px; }
+        }
+    </style>
+</head>
+<body>
+<div id="homeScreen" class="home-screen">
+    <div class="home-content">
+        <h1>⚔️ CIRCLEHEAD HERO ⚔️</h1>
+        <p>Turn-based dungeon crawler | Boss every 10 rooms | Coins auto-collect at door</p>
+        <div class="mode-buttons">
+            <div id="pcModeBtn" class="mode-btn selected">💻 PC Mode (WASD)</div>
+            <div id="mobileModeBtn" class="mode-btn">📱 Mobile Mode (Touch)</div>
+        </div>
+        <div class="shop-section">
+            <h3>🏪 ROLE SHOP 🏪</h3>
+            <div id="shopKnight" class="role-option"><div><div class="role-name">⚔️ Knight</div><div class="role-desc">Uses melee weapons</div></div><div><span class="role-price">FREE</span> <span class="owned-badge" id="ownedKnight">OWNED</span></div></div>
+            <div id="shopArcher" class="role-option"><div><div class="role-name">🏹 Archer</div><div class="role-desc">Bows: Near(2), Far(4), Highest(8)</div></div><div><span class="role-price" id="archerPrice">50🪙</span> <span id="ownedArcher" style="display:none;" class="owned-badge">OWNED</span></div></div>
+            <div id="shopWizard" class="role-option"><div><div class="role-name">🔥 Wizard</div><div class="role-desc">Fireball(3x3), Lightning(AoE), Ice Spike(15)</div></div><div><span class="role-price" id="wizardPrice">70🪙</span> <span id="ownedWizard" style="display:none;" class="owned-badge">OWNED</span></div></div>
+            <div id="shopUpgradeRoom" class="role-option"><div><div class="role-name">📐 Bigger Room</div><div class="role-desc">Upgrade 7x7 → 9x9 grid</div></div><div><span class="role-price" id="upgradePrice">500🪙</span> <span id="ownedUpgrade" style="display:none;" class="owned-badge">ACTIVE</span></div></div>
+        </div>
+        <div class="stats" style="background: #1e3525; display: inline-flex; margin-bottom: 15px;"><div class="stat">🪙 <span id="homeCoins">0</span> coins</div></div>
+        <button id="startGameBtn" class="start-btn">▶ START GAME</button>
+    </div>
+</div>
+
+<div id="gameContainer" class="game-container" style="display: none;">
+    <div class="game-wrapper">
+        <div class="room-badge" id="roomBadge">🏠 Room 1</div>
+        <div class="grid grid7" id="gameGrid"></div>
+        <div class="info-panel">
+            <div class="stats"><div class="stat">❤️ <span id="hpValue">0</span></div><div class="stat">⚔️ <span id="currentWeaponLabel">None</span></div><div class="stat">✨ <span id="damageBonusValue">0</span></div><div class="stat">🪙 <span id="coinValue">0</span></div></div>
+            <div class="inventory-slots" id="inventoryContainer"></div>
+            <div class="bow-status" id="bowStatusDisplay">⚔️ Special: inactive</div>
+            <div class="message-box" id="combatLog">WASD move | SPACE=potion | E=use cube</div>
+            <button id="nextRoomBtn" class="next-room-btn" disabled>🚪 Next Room</button>
+            <button id="resetBtn">🔄 New Run</button>
+        </div>
+        <div style="margin-top: 10px; text-align: center; font-size: 10px; color:#bdd6b0;">
+            🏹 <strong>Bows & Spells auto-shoot when you move!</strong> | 🔥 Fireball(3x3) | ⚡ Lightning(all) | ❄️ Ice Spike(15)<br>
+            💚 Potions | 🔶 Cubes: press <strong>E</strong> | 💰 <strong>Coins auto-collect when entering door!</strong>
+        </div>
+    </div>
+</div>
+<div class="spacebar-hint">␣ SPACE=heal | E=use cube</div>
+<canvas id="arrowCanvas" class="arrow-canvas"></canvas>
+
+<script>
+    let homeCoins = 0;
+    let selectedRole = "knight";
+    let selectedMode = "pc";
+    let bigRoomUpgrade = false;
+    let currentGridSize = 7;
+
+    function updateHomeUI() {
+        document.getElementById("homeCoins").innerText = homeCoins;
+        document.getElementById("ownedArcher").style.display = selectedRole === "archer" ? "inline-block" : "none";
+        document.getElementById("ownedWizard").style.display = selectedRole === "wizard" ? "inline-block" : "none";
+        document.getElementById("ownedKnight").style.display = selectedRole === "knight" ? "inline-block" : "none";
+        document.getElementById("ownedUpgrade").style.display = bigRoomUpgrade ? "inline-block" : "none";
+        if (selectedRole !== "archer") document.getElementById("archerPrice").innerHTML = "50🪙";
+        else document.getElementById("archerPrice").innerHTML = "OWNED";
+        if (selectedRole !== "wizard") document.getElementById("wizardPrice").innerHTML = "70🪙";
+        else document.getElementById("wizardPrice").innerHTML = "OWNED";
+        document.getElementById("upgradePrice").innerHTML = bigRoomUpgrade ? "ACTIVE" : "500🪙";
+    }
+
+    document.getElementById("shopKnight").addEventListener("click", () => { selectedRole = "knight"; updateHomeUI(); });
+    document.getElementById("shopArcher").addEventListener("click", () => { if (selectedRole !== "archer" && homeCoins >= 50) { homeCoins -= 50; selectedRole = "archer"; updateHomeUI(); } else if (selectedRole !== "archer") alert("Need 50 coins!"); });
+    document.getElementById("shopWizard").addEventListener("click", () => { if (selectedRole !== "wizard" && homeCoins >= 70) { homeCoins -= 70; selectedRole = "wizard"; updateHomeUI(); } else if (selectedRole !== "wizard") alert("Need 70 coins!"); });
+    document.getElementById("shopUpgradeRoom").addEventListener("click", () => { if (!bigRoomUpgrade && homeCoins >= 500) { homeCoins -= 500; bigRoomUpgrade = true; updateHomeUI(); } else if (!bigRoomUpgrade) alert("Need 500 coins!"); });
+
+    // Game variables
+    let grid = [], playerPos = { x: 3, y: 3 }, playerHP = 30, maxPlayerHP = 30, currentRoom = 1, globalDamageBonus = 0, bossesDefeated = 0, gameCoins = 0, playerRole = "knight";
+    let inventory = [], activeSpecial = null, enemies = [], nextEnemyId = 1, gameOver = false, waitingForNextRoom = false, doorPlaced = false, groundItems = new Map();
+    let pendingCoins = 0; // Coins to be collected when door is entered
+
+    // Weapon pools
+    const MELEE_WEAPONS = [{ name: "Iron Sword", baseDamage: 12, icon: "🗡️" }, { name: "Battle Axe", baseDamage: 16, icon: "🪓" }, { name: "Shadow Dagger", baseDamage: 9, icon: "🔪" }, { name: "Flail", baseDamage: 14, icon: "🔨" }, { name: "Claymore", baseDamage: 18, icon: "⚔️" }, { name: "Warhammer", baseDamage: 20, icon: "🔨" }];
+    const BOWS = [
+        { name: "Near Shot", baseDamage: 2, shots: 5, icon: "🏹⬅️", type: "near" },
+        { name: "Far Shot", baseDamage: 4, shots: 5, icon: "🏹➡️", type: "far" },
+        { name: "Heart Seeker", baseDamage: 8, shots: 3, icon: "🏹❤️", type: "highest" }
+    ];
+    const SPELLS = [
+        { name: "Fireball", baseDamage: 8, uses: 4, icon: "🔥", type: "fireball" },
+        { name: "Chain Lightning", baseDamage: 5, uses: 3, icon: "⚡", type: "lightning" },
+        { name: "Ice Spike", baseDamage: 15, uses: 2, icon: "❄️", type: "ice" }
+    ];
+
+    function getWeaponWithBonus(base) { return { ...base, damage: base.baseDamage + globalDamageBonus, baseDamage: base.baseDamage, type: "weapon" }; }
+    function getRandomWeapon() {
+        let pool = playerRole === "archer" ? BOWS : (playerRole === "wizard" ? SPELLS : MELEE_WEAPONS);
+        return getWeaponWithBonus({ ...pool[Math.floor(Math.random() * pool.length)] });
+    }
+
+    const POTION_TYPES = [{ name: "Lesser Potion", heal: 8, icon: "🧪", effect: "heal" }, { name: "Greater Potion", heal: 10, icon: "💚", effect: "heal" }];
+    const VITALITY_CUBE = { name: "Vitality Cube", hpBonus: 5, icon: "🔷", effect: "maxHp" };
+    const DAMAGE_CUBE = { name: "Damage Cube", damageBonus: 2, icon: "🔶", effect: "damage" };
+
+    function getRandomPotion() { return { ...POTION_TYPES[Math.random() < 0.5 ? 1 : 0], type: "consumable" }; }
+    function getBossEnemy(roomLevel) { return { name: "SHADOW LORD", hp: 40 + Math.floor(roomLevel / 10) * 8 + (bossesDefeated * 15), maxHp: 40 + Math.floor(roomLevel / 10) * 8 + (bossesDefeated * 15), icon: "👑", isBoss: true }; }
+    const ENEMY_NAMES = ["Goblin", "Orc", "Skeleton", "Troll", "Ghoul", "Hobgoblin", "Dark Elf"];
+    function getRandomEnemy(roomLevel) { let hp = 7 + Math.floor(roomLevel / 2) + Math.floor(Math.random() * 8) + (bossesDefeated * 2); return { name: ENEMY_NAMES[Math.floor(Math.random() * ENEMY_NAMES.length)], hp, maxHp: hp, icon: "👾" }; }
+    function getEnemyAttack(enemy) { return Math.max(1, enemy.hp); }
+
+    const canvas = document.getElementById('arrowCanvas'), ctx = canvas.getContext('2d');
+    function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    window.addEventListener('resize', resizeCanvas); resizeCanvas();
+
+    function showEffect(targetX, targetY, type) {
+        const gridElem = document.querySelector('.grid');
+        if (!gridElem) return;
+        const rect = gridElem.getBoundingClientRect();
+        const cellSize = gridElem.children[0]?.offsetWidth || 58;
+        const endX = rect.left + (targetX * (cellSize + 5)) + (cellSize / 2);
+        const endY = rect.top + (targetY * (cellSize + 5)) + (cellSize / 2);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (type === "fireball") {
+            ctx.beginPath(); ctx.arc(endX, endY, 28, 0, Math.PI * 2); ctx.fillStyle = '#ff4400'; ctx.fill();
+            ctx.beginPath(); ctx.arc(endX, endY, 18, 0, Math.PI * 2); ctx.fillStyle = '#ffaa44'; ctx.fill();
+        } else if (type === "lightning") {
+            for (let i = 0; i < 8; i++) { ctx.beginPath(); ctx.moveTo(endX, endY); ctx.lineTo(endX + (Math.random() - 0.5) * 40, endY + (Math.random() - 0.5) * 40); ctx.strokeStyle = '#ffff00'; ctx.lineWidth = 3; ctx.stroke(); }
+        } else if (type === "ice") {
+            ctx.beginPath(); ctx.arc(endX, endY, 20, 0, Math.PI * 2); ctx.fillStyle = '#88ccff'; ctx.fill();
+            ctx.beginPath(); ctx.arc(endX, endY, 12, 0, Math.PI * 2); ctx.fillStyle = '#ffffff'; ctx.fill();
+            for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.moveTo(endX, endY); ctx.lineTo(endX + (Math.random() - 0.5) * 25, endY + (Math.random() - 0.5) * 25); ctx.strokeStyle = '#aaffff'; ctx.lineWidth = 2; ctx.stroke(); }
+        } else {
+            ctx.beginPath(); ctx.arc(endX, endY, 15, 0, Math.PI * 2); ctx.fillStyle = '#e8c87a'; ctx.fill();
+            ctx.beginPath(); ctx.moveTo(endX + 12, endY); ctx.lineTo(endX - 6, endY - 6); ctx.lineTo(endX - 6, endY + 6); ctx.fill();
+        }
+        setTimeout(() => ctx.clearRect(0, 0, canvas.width, canvas.height), 250);
+    }
+
+    function showGameOverOverlay() {
+        const overlay = document.createElement('div');
+        overlay.className = 'game-over-overlay';
+        overlay.innerHTML = `<div class="game-over-content"><h1>💀 GAME OVER 💀</h1><p>Room ${currentRoom} | ${bossesDefeated} bosses slain</p><button id="gameOverResetBtn">🔄 Back to Home</button></div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('gameOverResetBtn').addEventListener('click', () => { overlay.remove(); document.getElementById("gameContainer").style.display = "none"; document.getElementById("homeScreen").style.display = "flex"; });
+    }
+
+    function dropItem(idx) { if (gameOver || waitingForNextRoom) return; if (!inventory[idx]) return; playerHP -= 4; setMessage(`❌ Dropped ${inventory[idx].name}! Lost 4 HP.`); inventory.splice(idx, 1); if (playerHP <= 0) { gameOver = true; updateUI(); renderGrid(); showGameOverOverlay(); } updateUI(); renderGrid(); }
+    function useCube() { if (gameOver || waitingForNextRoom) return false; const cubeIdx = inventory.findIndex(i => i.type === "consumable" && (i.effect === "maxHp" || i.effect === "damage")); if (cubeIdx === -1) { setMessage("❌ No cubes!"); return false; } const cube = inventory[cubeIdx]; if (cube.effect === "maxHp") { maxPlayerHP += cube.hpBonus; setMessage(`🔷 Max HP +${cube.hpBonus}!`); } else { globalDamageBonus += cube.damageBonus; for (let i of inventory) if (i.type === "weapon") i.damage = i.baseDamage + globalDamageBonus; if (activeSpecial) activeSpecial.damage = activeSpecial.baseDamage + globalDamageBonus; setMessage(`🔶 +${cube.damageBonus} damage!`); } inventory.splice(cubeIdx, 1); updateUI(); renderGrid(); return true; }
+    function useConsumable(idx) { if (gameOver || waitingForNextRoom) return false; const item = inventory[idx]; if (!item || item.type !== "consumable") return false; if (item.effect === "heal") { playerHP = Math.min(maxPlayerHP, playerHP + item.heal); inventory.splice(idx, 1); setMessage(`💚 Restored ${item.heal} HP.`); updateUI(); renderGrid(); return true; } return false; }
+    function useAnyPotion() { if (gameOver || waitingForNextRoom) return false; const idx = inventory.findIndex(i => i.type === "consumable" && i.effect === "heal"); if (idx === -1) { setMessage("❌ No potions!"); return false; } playerHP = Math.min(maxPlayerHP, playerHP + inventory[idx].heal); setMessage(`💚 Used ${inventory[idx].name}!`); inventory.splice(idx, 1); updateUI(); renderGrid(); return true; }
+    function findEquippedWeapon() { return inventory.find(i => i.type === "weapon"); }
+
+    function updateUI() {
+        document.getElementById("hpValue").innerHTML = `${playerHP}/${maxPlayerHP}`;
+        document.getElementById("damageBonusValue").innerHTML = `+${globalDamageBonus}`;
+        document.getElementById("coinValue").innerHTML = gameCoins;
+        document.getElementById("roomBadge").innerHTML = `🏠 Room ${currentRoom} | ${playerRole.toUpperCase()} | ${currentGridSize}x${currentGridSize}`;
+        const weapon = findEquippedWeapon();
+        document.getElementById("currentWeaponLabel").innerHTML = weapon ? `${weapon.icon} ${weapon.name} (${weapon.damage})` : "No weapon";
+        const container = document.getElementById("inventoryContainer");
+        container.innerHTML = "";
+        for (let i = 0; i < 6; i++) {
+            const slot = document.createElement("div"); slot.className = "inv-slot";
+            if (inventory[i]) {
+                const item = inventory[i];
+                let detail = item.damage ? `⚔️${item.damage}` : (item.heal ? `❤️+${item.heal}` : (item.hpBonus ? `🔷+${item.hpBonus} MAX` : `🔶+${item.damageBonus} DMG`));
+                slot.innerHTML = `<div style="font-size:26px">${item.icon}</div><div class="slot-dmg">${detail}</div><div class="slot-name">${item.name.substring(0,6)}</div><div class="drop-icon" data-drop-index="${i}">✖️</div>`;
+                if (item.effect === "heal") slot.addEventListener("click", (idx => e => { if (!e.target.classList.contains('drop-icon')) useConsumable(idx); })(i));
+                slot.querySelector('.drop-icon')?.addEventListener('click', (idx => e => { e.stopPropagation(); dropItem(idx); })(i));
+            } else { slot.innerHTML = "⬚"; slot.classList.add("empty"); }
+            container.appendChild(slot);
+        }
+        let specialText = "⚔️ Special: inactive";
+        if (activeSpecial && activeSpecial.remaining > 0) specialText = `${activeSpecial.icon} ${activeSpecial.name}: ${activeSpecial.remaining} left (dmg ${activeSpecial.damage})`;
+        document.getElementById("bowStatusDisplay").innerHTML = specialText;
+        const nextBtn = document.getElementById("nextRoomBtn");
+        nextBtn.disabled = !(enemies.length === 0 && !gameOver && !waitingForNextRoom);
+        if (nextBtn.disabled) nextBtn.classList.add("disabled"); else nextBtn.classList.remove("disabled");
+    }
+    function setMessage(msg) { document.getElementById("combatLog").innerHTML = msg; }
+
+    function performSpecialAttack() {
+        if (!activeSpecial || activeSpecial.remaining <= 0 || enemies.length === 0) return false;
+        if (playerRole === "archer") {
+            let target = null;
+            if (activeSpecial.type === "near") {
+                let minDist = Infinity;
+                for (let e of enemies) { let d = Math.abs(e.x - playerPos.x) + Math.abs(e.y - playerPos.y); if (d < minDist) { minDist = d; target = e; } }
+            } else if (activeSpecial.type === "far") {
+                let maxDist = -1;
+                for (let e of enemies) { let d = Math.abs(e.x - playerPos.x) + Math.abs(e.y - playerPos.y); if (d > maxDist) { maxDist = d; target = e; } }
+            } else {
+                let highest = -1;
+                for (let e of enemies) { if (e.hp > highest) { highest = e.hp; target = e; } }
+            }
+            if (target) { showEffect(target.x, target.y, "arrow"); target.hp -= activeSpecial.damage; setMessage(`${activeSpecial.icon} ${activeSpecial.name} hits ${target.name} for ${activeSpecial.damage} dmg!`); if (target.hp <= 0) removeEnemy(target.id); activeSpecial.remaining--; if (activeSpecial.remaining === 0) activeSpecial = null; updateUI(); renderGrid(); return true; }
+        } else if (playerRole === "wizard") {
+            if (activeSpecial.type === "fireball") {
+                let furthest = null, maxDist = -1;
+                for (let e of enemies) { let d = Math.abs(e.x - playerPos.x) + Math.abs(e.y - playerPos.y); if (d > maxDist) { maxDist = d; furthest = e; } }
+                if (furthest) {
+                    showEffect(furthest.x, furthest.y, "fireball");
+                    let hitCount = 0;
+                    for (let e of enemies) { if (Math.abs(e.x - furthest.x) <= 1 && Math.abs(e.y - furthest.y) <= 1) { e.hp -= activeSpecial.damage; hitCount++; if (e.hp <= 0) removeEnemy(e.id); } }
+                    setMessage(`🔥 Fireball hits ${hitCount} enemies in 3x3 area for ${activeSpecial.damage} dmg!`);
+                    activeSpecial.remaining--; if (activeSpecial.remaining === 0) activeSpecial = null;
+                    updateUI(); renderGrid(); return true;
+                }
+            } else if (activeSpecial.type === "lightning") {
+                showEffect(playerPos.x, playerPos.y, "lightning");
+                let hitCount = 0;
+                for (let e of enemies) { e.hp -= activeSpecial.damage; hitCount++; if (e.hp <= 0) removeEnemy(e.id); }
+                setMessage(`⚡ Chain lightning hits ${hitCount} enemies for ${activeSpecial.damage} dmg!`);
+                activeSpecial.remaining--; if (activeSpecial.remaining === 0) activeSpecial = null;
+                updateUI(); renderGrid(); return true;
+            } else if (activeSpecial.type === "ice") {
+                let highest = null, maxHp = -1;
+                for (let e of enemies) { if (e.hp > maxHp) { maxHp = e.hp; highest = e; } }
+                if (highest) {
+                    showEffect(highest.x, highest.y, "ice");
+                    highest.hp -= activeSpecial.damage;
+                    setMessage(`❄️ Ice Spike hits ${highest.name} for ${activeSpecial.damage} dmg!`);
+                    if (highest.hp <= 0) removeEnemy(highest.id);
+                    activeSpecial.remaining--; if (activeSpecial.remaining === 0) activeSpecial = null;
+                    updateUI(); renderGrid(); return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function tryActivateSpecial() {
+        if (!activeSpecial) {
+            const idx = inventory.findIndex(i => i.type === "weapon" && (i.shots !== undefined || i.uses !== undefined));
+            if (idx !== -1) {
+                const item = inventory[idx];
+                activeSpecial = { remaining: item.shots || item.uses, damage: item.damage, baseDamage: item.damage, name: item.name, icon: item.icon, type: item.type };
+                inventory.splice(idx, 1);
+                setMessage(`${activeSpecial.icon} ${activeSpecial.name} activated! ${activeSpecial.remaining} uses left.`);
+                updateUI(); renderGrid(); return true;
+            }
+        }
+        return false;
+    }
+
+    function bossRetaliate() { if (Math.random() < 0.4) { const boss = enemies.find(e => e.isBoss); if (boss) { let dmg = Math.max(3, Math.floor(boss.hp / 8)); playerHP -= dmg; showEffect(playerPos.x, playerPos.y, "spell"); setMessage(`👑 BOSS retaliates! ${dmg} damage!`); if (playerHP <= 0) { gameOver = true; showGameOverOverlay(); } updateUI(); renderGrid(); } } }
+    
+    function removeEnemy(id) { let idx = enemies.findIndex(e => e.id === id); if (idx !== -1) { let e = enemies[idx]; if (grid[e.y] && grid[e.y][e.x] === ("enemy" || "boss")) grid[e.y][e.x] = ""; enemies.splice(idx, 1); let drop = 5 + Math.floor(currentRoom / 5); gameCoins += drop; homeCoins += drop; pendingCoins += drop; setMessage(`🪙 +${drop} coins! (collected at door)`); updateHomeUI(); } updateUI(); checkAllEnemiesDefeated(); }
+    
+    function collectAllCoins() {
+        if (pendingCoins > 0) {
+            setMessage(`💰 Collected ${pendingCoins} coins from the room! Total: ${gameCoins}`);
+            pendingCoins = 0;
+            updateUI();
+        }
+    }
+    
+    function checkAllEnemiesDefeated() { if (enemies.length === 0 && !gameOver && !waitingForNextRoom && !doorPlaced) { doorPlaced = true; let empty = []; for (let y = 0; y < currentGridSize; y++) for (let x = 0; x < currentGridSize; x++) if (grid[y][x] === "" && !(x === playerPos.x && y === playerPos.y)) empty.push([x, y]); if (empty.length) { let [dx, dy] = empty[Math.floor(Math.random() * empty.length)]; grid[dy][dx] = "door"; setMessage("🚪 A door appears! Coins will be collected when you enter."); } renderGrid(); } }
+    
+    function meleeAttack(enemy) { let weapon = findEquippedWeapon(), damage = 0, wIdx = -1; if (weapon) { damage = weapon.damage; wIdx = inventory.findIndex(i => i === weapon); } if (damage > 0 && weapon) { enemy.hp -= damage; setMessage(`⚔️ You strike ${enemy.name} for ${damage} dmg!`); if (enemy.hp <= 0) { removeEnemy(enemy.id); inventory.splice(wIdx, 1); } else { let ea = getEnemyAttack(enemy); playerHP -= ea; setMessage(`${enemy.icon} counterattacks for ${ea} dmg!`); if (playerHP <= 0) { gameOver = true; showGameOverOverlay(); return false; } inventory.splice(wIdx, 1); } } else { let pd = playerHP, ed = enemy.hp; setMessage(`👊 FIST FIGHT! You deal ${pd}, enemy deals ${ed}!`); enemy.hp -= pd; playerHP -= ed; if (playerHP <= 0) { gameOver = true; showGameOverOverlay(); return false; } if (enemy.hp <= 0) removeEnemy(enemy.id); } updateUI(); renderGrid(); return true; }
+    
+    function tryMove(dx, dy) {
+        if (gameOver || waitingForNextRoom) return false;
+        // Auto-cast spells/bows on movement
+        if (!activeSpecial) tryActivateSpecial();
+        if (activeSpecial && enemies.length > 0) performSpecialAttack();
+        
+        let nx = playerPos.x + dx, ny = playerPos.y + dy;
+        if (nx < 0 || nx >= currentGridSize || ny < 0 || ny >= currentGridSize) return false;
+        let tile = grid[ny][nx];
+        if (tile === "wall") { setMessage("🧱 wall blocks"); return false; }
+        if (tile === "enemy" || tile === "boss") {
+            let enemy = enemies.find(e => e.x === nx && e.y === ny);
+            if (!enemy) return false;
+            meleeAttack(enemy);
+            if (enemy.isBoss) bossRetaliate();
+            if (!enemies.some(e => e.x === nx && e.y === ny)) {
+                grid[playerPos.y][playerPos.x] = "";
+                playerPos = { x: nx, y: ny };
+                grid[playerPos.y][playerPos.x] = "player";
+                renderGrid(); return true;
+            } else { renderGrid(); return false; }
+        }
+        if (tile === "door") {
+            collectAllCoins(); // Collect all pending coins before leaving
+            waitingForNextRoom = true;
+            nextRoom();
+            return true;
+        }
+        let ground = groundItems.get(`${nx},${ny}`);
+        if (ground) {
+            if (ground.type === "coin") {
+                // Coins on ground add to pending
+                let value = ground.value || 15;
+                gameCoins += value;
+                homeCoins += value;
+                pendingCoins += value;
+                setMessage(`🪙 +${value} coins! (will collect at door)`);
+                updateHomeUI();
+                grid[ny][nx] = "";
+                groundItems.delete(`${nx},${ny}`);
+                grid[playerPos.y][playerPos.x] = "";
+                playerPos = { x: nx, y: ny };
+                grid[playerPos.y][playerPos.x] = "player";
+                updateUI(); renderGrid(); return true;
+            } else if (inventory.length >= 6) { setMessage(`Inventory full!`); return false; }
+            else {
+                inventory.push({ ...ground, type: ground.type });
+                grid[ny][nx] = "";
+                groundItems.delete(`${nx},${ny}`);
+                grid[playerPos.y][playerPos.x] = "";
+                playerPos = { x: nx, y: ny };
+                grid[playerPos.y][playerPos.x] = "player";
+                setMessage(`🔍 ${ground.name} added!`);
+                updateUI(); renderGrid(); return true;
+            }
+        }
+        if (tile === "") {
+            grid[playerPos.y][playerPos.x] = "";
+            playerPos = { x: nx, y: ny };
+            grid[playerPos.y][playerPos.x] = "player";
+            renderGrid(); return true;
+        }
+        return false;
+    }
+
+    function generateRoom(roomLevel) {
+        const size = currentGridSize;
+        let newGrid = Array(size).fill().map(() => Array(size).fill(""));
+        for (let i = 0; i < size; i++) { newGrid[0][i] = "wall"; newGrid[size-1][i] = "wall"; newGrid[i][0] = "wall"; newGrid[i][size-1] = "wall"; }
+        for (let y = 1; y < size-1; y++) for (let x = 1; x < size-1; x++) newGrid[y][x] = "";
+        let start = Math.floor(size / 2);
+        playerPos = { x: start, y: start };
+        newGrid[start][start] = "player";
+        enemies = []; groundItems.clear(); nextEnemyId = 1; doorPlaced = false;
+        let freeCells = [];
+        for (let y = 1; y < size-1; y++) for (let x = 1; x < size-1; x++) if (!(x === start && y === start)) freeCells.push([x, y]);
+        for (let i = freeCells.length - 1; i > 0; i--) { let j = Math.floor(Math.random() * (i + 1)); [freeCells[i], freeCells[j]] = [freeCells[j], freeCells[i]]; }
+        const isBoss = (roomLevel % 10 === 0);
+        if (isBoss) { let [bx, by] = freeCells.shift() || [start, start+1]; let boss = getBossEnemy(roomLevel); enemies.push({ id: nextEnemyId++, x: bx, y: by, name: boss.name, hp: boss.hp, maxHp: boss.maxHp, icon: boss.icon, isBoss: true }); newGrid[by][bx] = "boss"; setMessage(`⚠️ BOSS ROOM! Boss may shoot back!`); }
+        else {
+            let enemyCount = Math.min(6, Math.floor(Math.random() * 3) + 3);
+            for (let i = 0; i < enemyCount && freeCells.length; i++) { let [ex, ey] = freeCells.shift(); let e = getRandomEnemy(roomLevel); enemies.push({ id: nextEnemyId++, x: ex, y: ey, name: e.name, hp: e.hp, maxHp: e.maxHp, icon: e.icon }); newGrid[ey][ex] = "enemy"; }
+            let weaponCount = Math.min(3, enemyCount);
+            for (let i = 0; i < weaponCount && freeCells.length; i++) { let [wx, wy] = freeCells.shift(); groundItems.set(`${wx},${wy}`, { ...getRandomWeapon(), type: "weapon" }); newGrid[wy][wx] = "weapon"; }
+            let potCount = Math.floor(Math.random() * 2) + 1;
+            for (let i = 0; i < potCount && freeCells.length; i++) { let [px, py] = freeCells.shift(); groundItems.set(`${px},${py}`, getRandomPotion()); newGrid[py][px] = "potion"; }
+            if (freeCells.length && Math.random() < 0.4) { let [cx, cy] = freeCells.shift(); groundItems.set(`${cx},${cy}`, { name: "Coin Pouch", value: 15 + Math.floor(roomLevel / 5), icon: "🪙", type: "coin" }); newGrid[cy][cx] = "coin"; }
+            if (freeCells.length && Math.random() < 0.3) { let [cx, cy] = freeCells.shift(); groundItems.set(`${cx},${cy}`, { ...VITALITY_CUBE, type: "consumable" }); newGrid[cy][cx] = "potion"; }
+            if (freeCells.length && Math.random() < 0.3) { let [dx, dy] = freeCells.shift(); groundItems.set(`${dx},${dy}`, { ...DAMAGE_CUBE, type: "consumable" }); newGrid[dy][dx] = "damage-cube"; }
+        }
+        return newGrid;
+    }
+
+    function nextRoom() {
+        if (enemies.length !== 0) { setMessage("❌ Defeat all enemies first!"); waitingForNextRoom = false; return; }
+        if (currentRoom % 10 === 0) { bossesDefeated++; gameCoins += 50; homeCoins += 50; pendingCoins += 50; setMessage(`🔥 Boss defeated! +50 coins! (collected at door)`); updateHomeUI(); }
+        currentRoom++;
+        waitingForNextRoom = false;
+        grid = generateRoom(currentRoom);
+        updateUI(); renderGrid();
+        setMessage(`✨ Room ${currentRoom} — ${bossesDefeated} bosses slain! ✨`);
+    }
+
+    function resetGame() {
+        gameOver = false; waitingForNextRoom = false; currentRoom = 1; playerHP = 30; maxPlayerHP = 30; globalDamageBonus = 0; bossesDefeated = 0; gameCoins = 0; pendingCoins = 0;
+        playerRole = selectedRole;
+        currentGridSize = bigRoomUpgrade ? 9 : 7;
+        inventory = []; activeSpecial = null;
+        ctx.clearRect(0, 0, canvas.width, canvas.width);
+        const gridElem = document.getElementById("gameGrid");
+        gridElem.className = `grid ${currentGridSize === 7 ? 'grid7' : 'grid9'}`;
+        grid = generateRoom(1);
+        updateUI(); renderGrid();
+        setMessage(`🏁 ${playerRole.toUpperCase()} class! ${currentGridSize}x${currentGridSize} grid! Spells auto-cast on move!`);
+    }
+
+    function renderGrid() {
+        const container = document.getElementById("gameGrid");
+        container.innerHTML = "";
+        const size = currentGridSize;
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const cell = document.createElement("div");
+                cell.className = "cell";
+                const tile = grid[y][x];
+                let main = "", extra = "";
+                if (tile === "player") { main = "😀"; cell.classList.add("player"); }
+                else if (tile === "enemy") { let e = enemies.find(e => e.x === x && e.y === y); if (e) { main = e.icon; extra = `<div class="enemy-hp">❤️ ${e.hp}/${e.maxHp}</div>`; cell.classList.add("enemy"); } }
+                else if (tile === "boss") { let e = enemies.find(e => e.x === x && e.y === y); if (e) { main = e.icon; extra = `<div class="enemy-hp">👑 ${e.hp}/${e.maxHp}</div>`; cell.classList.add("boss"); } }
+                else if (["weapon","potion","damage-cube","coin"].includes(tile)) {
+                    let it = groundItems.get(`${x},${y}`);
+                    if (it) {
+                        main = it.icon;
+                        let d = it.damage ? `${it.damage}` : (it.heal ? `+${it.heal}` : (it.hpBonus ? `+${it.hpBonus} MAX` : (it.damageBonus ? `+${it.damageBonus} DMG` : (it.value ? `${it.value}🪙` : ""))));
+                        extra = `<div class="item-name-on-ground">${it.name} ${d}</div>`;
+                        if (it.value) { main = "🪙"; extra = `<div class="item-name-on-ground">${it.value} coins</div>`; }
+                    }
+                    if (tile === "weapon") cell.classList.add("weapon");
+                    else if (tile === "potion") cell.classList.add("potion");
+                    else if (tile === "damage-cube") cell.classList.add("damage-cube");
+                    else if (tile === "coin") cell.classList.add("coin");
+                } else if (tile === "door") { main = "🚪"; cell.classList.add("door"); }
+                else if (tile === "wall") { main = "⬛"; cell.classList.add("wall"); }
+                else if (tile === "") { main = ""; cell.classList.add("empty-tile"); }
+                cell.innerHTML = main + extra;
+                cell.addEventListener("click", ((tx, ty) => () => { if (gameOver) return; let dx = tx - playerPos.x, dy = ty - playerPos.y; if (Math.abs(dx) + Math.abs(dy) === 1) tryMove(dx, dy); })(x, y));
+                container.appendChild(cell);
+            }
+        }
+    }
+
+    const homeDiv = document.getElementById("homeScreen"), gameDiv = document.getElementById("gameContainer");
+    document.getElementById("startGameBtn").addEventListener("click", () => { document.body.style.touchAction = selectedMode === "mobile" ? "auto" : "manipulation"; homeDiv.style.display = "none"; gameDiv.style.display = "block"; resetGame(); });
+    window.addEventListener("keydown", (e) => { if (homeDiv.style.display !== "none") return; if (gameOver || waitingForNextRoom) return; let key = e.key.toLowerCase(); if (key === "w" || key === "arrowup") tryMove(0, -1); else if (key === "s" || key === "arrowdown") tryMove(0, 1); else if (key === "a" || key === "arrowleft") tryMove(-1, 0); else if (key === "d" || key === "arrowright") tryMove(1, 0); else if (key === " ") { e.preventDefault(); useAnyPotion(); } else if (key === "e") { e.preventDefault(); useCube(); } });
+    document.getElementById("resetBtn").addEventListener("click", () => { gameDiv.style.display = "none"; homeDiv.style.display = "flex"; updateHomeUI(); });
+    document.getElementById("nextRoomBtn").addEventListener("click", nextRoom);
+    updateHomeUI();
+</script>
+</body>
+</html>

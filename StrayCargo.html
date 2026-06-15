@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Stray Cargo - More Gold! | Silver Checkpoints | Inspector Removes Ice</title>
+    <style>
+        * {
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: linear-gradient(145deg, #1a3a2a 0%, #0e2a1c 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Courier New', 'VT323', monospace;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .game-container {
+            background: #2c1e12;
+            padding: 20px 25px 25px 25px;
+            border-radius: 48px 48px 32px 32px;
+            box-shadow: 0 20px 30px rgba(0,0,0,0.5), inset 0 1px 4px rgba(255,215,150,0.3);
+        }
+
+        .live-counters {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .live-counter {
+            background: #1a0f05;
+            padding: 4px 12px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #ffdd99;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid #cc7b2e;
+        }
+        .live-counter span:first-child { font-size: 1.3rem; }
+        .live-counter span:last-child {
+            background: #00000066;
+            padding: 2px 8px;
+            border-radius: 30px;
+            font-size: 1.4rem;
+            color: #ffcc66;
+        }
+
+        .checkpoint-header {
+            background: #1a0f05;
+            padding: 8px 15px;
+            border-radius: 60px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+            border: 3px solid #cc7b2e;
+        }
+        .checkpoint-req {
+            font-size: 1rem;
+            font-weight: bold;
+            color: #ffaa55;
+            background: #00000088;
+            padding: 4px 12px;
+            border-radius: 40px;
+        }
+        .checkpoint-timer {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #ff8866;
+            background: #00000088;
+            padding: 3px 14px;
+            border-radius: 50px;
+        }
+        .mode-toggle {
+            background: #362712;
+            padding: 3px 10px;
+            border-radius: 40px;
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .mode-btn {
+            background: #cc7b2e;
+            border: none;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 0.9rem;
+            padding: 3px 14px;
+            border-radius: 30px;
+            color: #2c1a07;
+            cursor: pointer;
+        }
+        .mode-btn.easy-active { background: #44aa66; color: white; }
+        .mode-btn.hard-active { background: #cc4444; color: white; }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            box-shadow: 0 8px 18px black;
+            border-radius: 16px;
+            cursor: pointer;
+        }
+
+        .info-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #1f1409;
+            color: #f7e9b0;
+            padding: 6px 15px;
+            margin-top: 12px;
+            border-radius: 60px;
+            font-weight: bold;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            background: #00000066;
+            padding: 4px 15px;
+            border-radius: 40px;
+        }
+
+        .stat {
+            display: flex;
+            align-items: baseline;
+            gap: 5px;
+        }
+        .stat span:first-child { font-size: 0.85rem; }
+        .stat span:last-child { font-size: 1.6rem; font-weight: bold; color: #ffd966; }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            background: #362712;
+            padding: 4px 18px;
+            border-radius: 60px;
+        }
+
+        .dir-btn {
+            background: #cc7b2e;
+            border: none;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 1.3rem;
+            padding: 4px 16px;
+            border-radius: 40px;
+            color: #2c1a07;
+            cursor: pointer;
+            box-shadow: 0 3px 0 #6a3c12;
+        }
+        .dir-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #6a3c12; }
+        .reset-btn {
+            background: #cc7b2e;
+            border: none;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 1.1rem;
+            padding: 4px 16px;
+            border-radius: 40px;
+            color: #2c1a07;
+            cursor: pointer;
+            box-shadow: 0 3px 0 #6a3c12;
+        }
+        .reset-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #6a3c12; }
+
+        .speed-control {
+            background: #1f1409;
+            padding: 6px 15px;
+            border-radius: 40px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 10px;
+        }
+        .speed-control label { font-size: 1rem; font-weight: bold; color: #ffcc88; }
+        .speed-slider { width: 180px; height: 5px; -webkit-appearance: none; background: #cc7b2e; border-radius: 5px; }
+        .speed-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #ffcc66; cursor: pointer; }
+        .speed-value { background: #00000088; padding: 2px 10px; border-radius: 30px; font-size: 1rem; color: #ffcc66; }
+        .multiplier-badge { background: #44aaff88; padding: 2px 10px; border-radius: 30px; font-size: 0.9rem; }
+
+        .highscore-panel {
+            background: #1f1409cc;
+            border-radius: 20px;
+            padding: 6px 12px;
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            font-size: 0.9rem;
+            flex-wrap: wrap;
+        }
+        .highscore-item {
+            background: #00000066;
+            padding: 4px 12px;
+            border-radius: 30px;
+        }
+        .highscore-item span:first-child { color: #ffaa77; }
+        .highscore-item span:last-child { color: #ffdd99; font-weight: bold; font-size: 1.2rem; margin-left: 8px; }
+
+        .bottom-panel { margin-top: 10px; background: #1f1409cc; border-radius: 24px; padding: 6px; }
+        .status-msg { background: #000000aa; padding: 4px 10px; border-radius: 30px; font-size: 0.85rem; color: #ffcf7a; text-align: center; }
+        @keyframes pulse { 50% { opacity: 0.7; transform: scale(1.02); background: #aa3300; } }
+
+        .choice-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            font-family: monospace;
+        }
+        .choice-menu {
+            background: #2c1e12;
+            padding: 30px 40px;
+            border-radius: 60px;
+            text-align: center;
+            border: 4px solid #cc7b2e;
+            box-shadow: 0 10px 30px black;
+        }
+        .choice-menu h2 { color: #ffcc66; font-size: 1.8rem; margin-bottom: 20px; }
+        .choice-menu p { color: #ffaa77; font-size: 1.2rem; margin-bottom: 25px; }
+        .choice-buttons { display: flex; gap: 30px; justify-content: center; }
+        .choice-btn {
+            background: #cc7b2e;
+            border: none;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 1.3rem;
+            padding: 12px 25px;
+            border-radius: 50px;
+            color: #2c1a07;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #6a3c12;
+            transition: 0.07s linear;
+        }
+        .choice-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #6a3c12; }
+        .choice-btn.station { background: #44aa66; color: white; }
+        .choice-btn.endless { background: #cc4444; color: white; }
+    </style>
+</head>
+<body>
+<div>
+    <div class="game-container">
+        <div class="live-counters">
+            <div class="live-counter"><span>🪵</span><span id="liveWood">0</span></div>
+            <div class="live-counter"><span>🪙</span><span id="liveGold">0</span></div>
+            <div class="live-counter"><span>⚪</span><span id="liveSilver">0</span></div>
+            <div class="live-counter"><span>💣</span><span id="liveBomb">0</span></div>
+            <div class="live-counter"><span>❄️</span><span id="liveIce">0</span></div>
+            <div class="live-counter"><span>🚃</span><span id="liveCarriage">0</span></div>
+            <div class="live-counter multiplier-badge"><span>✨ MULTI</span><span id="multiplierDisplay">1x</span></div>
+        </div>
+        
+        <div class="checkpoint-header">
+            <div class="checkpoint-req" id="checkpointReqDisplay">🎯 CP1: 3 WOOD + 2 GOLD + 1 SILVER + 1 BOMB</div>
+            <div class="checkpoint-timer" id="checkpointTimerDisplay">⏱️ 20s</div>
+            <div class="mode-toggle">
+                <button id="easyModeBtn" class="mode-btn easy-active">🟢 EASY</button>
+                <button id="hardModeBtn" class="mode-btn">🔴 HARD</button>
+            </div>
+        </div>
+        
+        <canvas id="gameCanvas" width="1000" height="580" style="width:100%; height:auto; max-width:1000px; aspect-ratio:1000/580"></canvas>
+        
+        <div class="info-panel">
+            <div class="stats">
+                <div class="stat"><span>⭐ SCORE</span><span id="scoreVal">0</span></div>
+                <div class="stat"><span>🏗️ TOWER</span><span id="towerHeight">0</span></div>
+                <div class="stat"><span>🐌 SLOW</span><span id="slowTimer">0</span></div>
+            </div>
+            <div class="controls">
+                <button class="dir-btn" id="leftBtn">◀ LEFT</button>
+                <button class="dir-btn" id="rightBtn">RIGHT ▶</button>
+                <button class="reset-btn" id="resetGameBtn">🚂 RESTART</button>
+            </div>
+        </div>
+        
+        <div class="speed-control">
+            <label>⚡ SPEED</label>
+            <input type="range" id="speedSlider" class="speed-slider" min="0.5" max="2.0" step="0.05" value="1.0">
+            <div class="speed-value" id="speedValue">1.00x</div>
+        </div>
+        
+        <div class="highscore-panel">
+            <div class="highscore-item"><span>🏆 EASY HS:</span><span id="easyHighScore">0</span></div>
+            <div class="highscore-item"><span>🏆 HARD HS:</span><span id="hardHighScore">0</span></div>
+        </div>
+        
+        <div class="bottom-panel">
+            <div class="status-msg" id="gameStatusMsg">🪙 GOLD IS MORE COMMON! | ✨ Silver in checkpoints | 👮 Inspector removes ALL ice</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function(){
+        // HIGH SCORES
+        let easyHighScore = 0, hardHighScore = 0;
+        function loadHighScores() {
+            try {
+                let se = localStorage.getItem('strayCargo_easyHighScore');
+                let sh = localStorage.getItem('strayCargo_hardHighScore');
+                if (se) easyHighScore = parseInt(se) || 0;
+                if (sh) hardHighScore = parseInt(sh) || 0;
+            } catch(e) {}
+            document.getElementById('easyHighScore').innerText = easyHighScore;
+            document.getElementById('hardHighScore').innerText = hardHighScore;
+        }
+        function saveHighScore(score, diff) {
+            if (diff === 'easy' && score > easyHighScore) {
+                easyHighScore = score;
+                try { localStorage.setItem('strayCargo_easyHighScore', easyHighScore); } catch(e) {}
+                document.getElementById('easyHighScore').innerText = easyHighScore;
+                return true;
+            } else if (diff === 'hard' && score > hardHighScore) {
+                hardHighScore = score;
+                try { localStorage.setItem('strayCargo_hardHighScore', hardHighScore); } catch(e) {}
+                document.getElementById('hardHighScore').innerText = hardHighScore;
+                return true;
+            }
+            return false;
+        }
+        
+        // AUDIO
+        let audioCtx = null;
+        function initAudio() {
+            if (audioCtx) return;
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        function playBeep(freq, dur, vol=0.3) {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(vol, now);
+            gain.gain.exponentialRampToValueAtTime(0.00001, now + dur);
+            osc.start();
+            osc.stop(now + dur);
+        }
+        function playCollectSound() { playBeep(660, 0.12, 0.25); }
+        function playHijackerSound() { playBeep(220, 0.35, 0.4); }
+        function playCheckpointSound() { playBeep(880, 0.25, 0.35); playBeep(660, 0.2, 0.3); }
+        function playGameOverSound() { playBeep(150, 0.8, 0.5); }
+        function playInspectorSound() { playBeep(440, 0.2, 0.3); playBeep(330, 0.2, 0.3); }
+        function playMinusCartSound() { playBeep(300, 0.25, 0.35); playBeep(250, 0.2, 0.3); }
+        
+        // CANVAS
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let W = 1000, H = 580;
+        canvas.width = W; canvas.height = H;
+        const TRAIN_Y = 400;
+        let trainX = W/2 - 60;
+        
+        const BASE_TRAIN_SPEED = 5.2;
+        const BASE_CARGO_VEL = 2.2;
+        const BASE_HIJACKER_VEL = 3.2;
+        const BASE_SPAWN_DELAY = 18;
+        let trainSpeed = BASE_TRAIN_SPEED;
+        let cargoBaseVel = BASE_CARGO_VEL;
+        let hijackerBaseVel = BASE_HIJACKER_VEL;
+        let speedMultiplier = 1.0;
+        
+        let moveLeft = false, moveRight = false;
+        let slowUntil = 0;
+        let carriageCount = 0;
+        const CARRIAGE_W = 70, CARRIAGE_H = 42;
+        
+        let towerBlocks = [];
+        let nextBlockId = 1;
+        
+        const TYPES = {
+            WOOD: { name:'wood', color:'#b97f48', symbol:'🪵', points:1, emoji:'🪵', towerColor:'#b97f48' },
+            GOLD: { name:'gold', color:'#f5b042', symbol:'🪙', points:3, emoji:'🪙', towerColor:'#f5b042' },
+            SILVER: { name:'silver', color:'#c0c0c0', symbol:'⚪', points:2, emoji:'⚪', towerColor:'#c0c0c0' },
+            BOMB: { name:'bomb', color:'#5a3e2e', symbol:'💣', points:-2, emoji:'💣', towerColor:'#8b3a2a' },
+            ICE:  { name:'ice',  color:'#a4dfeb', symbol:'❄️', points:0, emoji:'❄️', towerColor:'#a4dfeb' },
+            POWERUP_CARRIAGE: { name:'carriage', color:'#88aa44', symbol:'🚃', points:2, emoji:'🚃', towerColor:'#88aa44' },
+            MINUS_CART: { name:'minuscart', color:'#aa6644', symbol:'🗑️', points:-3, emoji:'🗑️', towerColor:'#aa6644' },
+            HIJACKER: { name:'hijacker', color:'#8b0000', symbol:'🏴‍☠️', points:0, emoji:'🏴‍☠️', towerColor:'#8b0000' }
+        };
+        
+        let score = 0;
+        let gameAlive = true;
+        let gameOverReason = "";
+        let gameMode = 'station';
+        let waitingForChoice = false;
+        
+        // CHECKPOINTS with SILVER and REDUCED amounts
+        let checkpointTimer = 20.0;
+        let currentCheckpointIdx = 0;
+        let checkpointRequirements = [];
+        let checkpointPassed = [];
+        
+        function generateCheckpointForIndex(idx) {
+            // Reduced requirements: wood ~ 3 + idx*0.8, gold ~ 2 + idx*0.6, silver ~ 1 + idx*0.4, bomb ~ 1 + floor(idx/3)
+            let woodReq = Math.min(3 + Math.floor(idx * 0.8), 25);
+            let goldReq = Math.min(2 + Math.floor(idx * 0.6), 20);
+            let silverReq = Math.min(1 + Math.floor(idx * 0.4), 12);
+            let bombReq = Math.min(1 + Math.floor(idx / 3), 7);
+            return { wood: woodReq, gold: goldReq, silver: silverReq, bomb: bombReq, desc: `${woodReq}🪵 + ${goldReq}🪙 + ${silverReq}⚪ + ${bombReq}💣` };
+        }
+        
+        function initCheckpoints() {
+            checkpointRequirements = [];
+            for (let i = 0; i < 30; i++) checkpointRequirements.push(generateCheckpointForIndex(i));
+            checkpointPassed = new Array(100).fill(false);
+        }
+        
+        let checkpointEvaluationLock = false;
+        
+        // HIJACKERS
+        let hijackerList = [];
+        let nextHijackerId = 500;
+        let hijackerSpawnDelay = 0;
+        const HIJACKER_W = 48, HIJACKER_H = 48;
+        let hijackerHitWarning = false;
+        
+        let inspectorTimer = 0;
+        const INSPECTOR_INTERVAL_FRAMES = 20 * 60;
+        let inspectorWarning = false;
+        
+        let cargoList = [];
+        let nextId = 100;
+        const CARGO_W = 32, CARGO_H = 32;
+        const CARGO_SPAWN_Y = 60;
+        let spawnDelay = 0;
+        
+        let currentDifficulty = 'easy';
+        let hijackerSpawnChance = 0.03;
+        let minusCartChanceBonus = 0;
+        let checkpointTimeBase = 20.0;
+        
+        function applyDifficultySettings() {
+            if (currentDifficulty === 'easy') {
+                hijackerSpawnChance = 0.03;
+                minusCartChanceBonus = 0;
+                checkpointTimeBase = 20.0;
+                document.getElementById('easyModeBtn').classList.add('easy-active');
+                document.getElementById('hardModeBtn').classList.remove('hard-active');
+            } else {
+                hijackerSpawnChance = 0.045;
+                minusCartChanceBonus = 0.05;
+                checkpointTimeBase = 16.0;
+                document.getElementById('hardModeBtn').classList.add('hard-active');
+                document.getElementById('easyModeBtn').classList.remove('easy-active');
+            }
+            if (gameAlive && gameMode === 'endless') checkpointTimer = checkpointTimeBase;
+        }
+        
+        const speedSlider = document.getElementById('speedSlider');
+        const speedValueSpan = document.getElementById('speedValue');
+        function updateSpeedMultiplier() {
+            speedMultiplier = parseFloat(speedSlider.value);
+            speedValueSpan.innerText = speedMultiplier.toFixed(2) + 'x';
+            trainSpeed = BASE_TRAIN_SPEED * speedMultiplier;
+            cargoBaseVel = BASE_CARGO_VEL * speedMultiplier;
+            hijackerBaseVel = BASE_HIJACKER_VEL * speedMultiplier;
+            for (let c of cargoList) {
+                let orig = c.originalVel || (c.velY / (c.speedMult || 1));
+                c.originalVel = orig;
+                c.velY = orig * speedMultiplier;
+                c.speedMult = speedMultiplier;
+            }
+            for (let h of hijackerList) {
+                let orig = h.originalVel || (h.velY / (h.speedMult || 1));
+                h.originalVel = orig;
+                h.velY = orig * speedMultiplier;
+                h.speedMult = speedMultiplier;
+            }
+        }
+        speedSlider.addEventListener('input', () => { updateSpeedMultiplier(); if(!waitingForChoice) gameStatusMsg.innerText = `⚡ Speed ${speedMultiplier.toFixed(2)}x`; });
+        
+        // UI elements
+        const scoreSpan = document.getElementById('scoreVal');
+        const towerHeightSpan = document.getElementById('towerHeight');
+        const slowTimerSpan = document.getElementById('slowTimer');
+        const checkpointReqDisplay = document.getElementById('checkpointReqDisplay');
+        const checkpointTimerDisplay = document.getElementById('checkpointTimerDisplay');
+        const gameStatusMsg = document.getElementById('gameStatusMsg');
+        const multiplierDisplay = document.getElementById('multiplierDisplay');
+        const liveWoodSpan = document.getElementById('liveWood');
+        const liveGoldSpan = document.getElementById('liveGold');
+        const liveSilverSpan = document.getElementById('liveSilver');
+        const liveBombSpan = document.getElementById('liveBomb');
+        const liveIceSpan = document.getElementById('liveIce');
+        const liveCarriageSpan = document.getElementById('liveCarriage');
+        
+        function countItems() {
+            let counts = { wood:0, gold:0, silver:0, bomb:0, ice:0, carriage:0 };
+            for (let b of towerBlocks) {
+                if (b.type === TYPES.WOOD) counts.wood++;
+                else if (b.type === TYPES.GOLD) counts.gold++;
+                else if (b.type === TYPES.SILVER) counts.silver++;
+                else if (b.type === TYPES.BOMB) counts.bomb++;
+                else if (b.type === TYPES.ICE) counts.ice++;
+                else if (b.type === TYPES.POWERUP_CARRIAGE) counts.carriage++;
+            }
+            return counts;
+        }
+        
+        function updateMultiplierDisplay() {
+            let iceCount = countItems().ice;
+            multiplierDisplay.innerText = (iceCount + 1) + 'x';
+        }
+        
+        function updateLiveCounters() {
+            let c = countItems();
+            liveWoodSpan.innerText = c.wood;
+            liveGoldSpan.innerText = c.gold;
+            liveSilverSpan.innerText = c.silver;
+            liveBombSpan.innerText = c.bomb;
+            liveIceSpan.innerText = c.ice;
+            liveCarriageSpan.innerText = c.carriage;
+            updateMultiplierDisplay();
+        }
+        
+        function updateUI() {
+            scoreSpan.innerText = Math.floor(score);
+            towerHeightSpan.innerText = towerBlocks.length;
+            updateLiveCounters();
+            let idx = currentCheckpointIdx;
+            if (idx < checkpointRequirements.length) {
+                let req = checkpointRequirements[idx];
+                checkpointReqDisplay.innerHTML = `🎯 CHECKPOINT ${idx+1}: ${req.desc}`;
+            } else {
+                checkpointReqDisplay.innerHTML = `🏆 BEYOND LIMIT! 🏆`;
+            }
+        }
+        
+        function addTowerBlock(type, collisionX) {
+            let wagonIndex = 0;
+            if (collisionX < trainX) {
+                for (let i=1; i<=carriageCount; i++) {
+                    let start = trainX - (i*(CARRIAGE_W+6));
+                    let end = start + CARRIAGE_W;
+                    if (collisionX >= start && collisionX <= end) { wagonIndex = i; break; }
+                }
+            }
+            let onWagon = towerBlocks.filter(b => b.parentWagon === wagonIndex).length;
+            let row = Math.floor(onWagon / 3), col = onWagon % 3;
+            let px, py;
+            if (wagonIndex === 0) {
+                px = trainX + 15 + (col*22);
+                py = TRAIN_Y - 8 - (row*16);
+            } else {
+                let baseX = trainX - (wagonIndex*(CARRIAGE_W+6)) + 15;
+                px = baseX + (col*22);
+                py = TRAIN_Y + 5 - (row*16);
+            }
+            towerBlocks.push({ id: nextBlockId++, type, x: px, y: py, parentWagon: wagonIndex });
+            updateUI();
+        }
+        
+        function removeTowerBlocks(cnt) {
+            for (let i=0; i<cnt && towerBlocks.length>0; i++) towerBlocks.pop();
+            reorderTowerPositions();
+            updateUI();
+        }
+        
+        function removeAllIce() {
+            towerBlocks = towerBlocks.filter(b => b.type !== TYPES.ICE);
+            reorderTowerPositions();
+            updateUI();
+        }
+        
+        function reorderTowerPositions() {
+            let byWagon = {};
+            for (let b of towerBlocks) {
+                if (!byWagon[b.parentWagon]) byWagon[b.parentWagon] = [];
+                byWagon[b.parentWagon].push(b);
+            }
+            for (let w in byWagon) {
+                let wi = parseInt(w);
+                let arr = byWagon[wi];
+                arr.forEach((b, idx) => {
+                    let row = Math.floor(idx/3), col = idx%3;
+                    if (wi === 0) {
+                        b.x = trainX + 15 + (col*22);
+                        b.y = TRAIN_Y - 8 - (row*16);
+                    } else {
+                        let baseX = trainX - (wi*(CARRIAGE_W+6)) + 15;
+                        b.x = baseX + (col*22);
+                        b.y = TRAIN_Y + 5 - (row*16);
+                    }
+                });
+            }
+        }
+        
+        function consumeCheckpointItems(req) {
+            let remWood = req.wood, remGold = req.gold, remSilver = req.silver, remBomb = req.bomb;
+            for (let i=towerBlocks.length-1; i>=0; i--) {
+                let b = towerBlocks[i];
+                if (remWood>0 && b.type===TYPES.WOOD) { towerBlocks.splice(i,1); remWood--; }
+                else if (remGold>0 && b.type===TYPES.GOLD) { towerBlocks.splice(i,1); remGold--; }
+                else if (remSilver>0 && b.type===TYPES.SILVER) { towerBlocks.splice(i,1); remSilver--; }
+                else if (remBomb>0 && b.type===TYPES.BOMB) { towerBlocks.splice(i,1); remBomb--; }
+            }
+            reorderTowerPositions();
+            updateUI();
+        }
+        
+        function applyMinusCart() {
+            if (carriageCount > 0) { carriageCount--; gameStatusMsg.innerText = `🗑️ MINUS CART! Lost 1 carriage! (${carriageCount})`; initAudio(); playMinusCartSound(); }
+            else gameStatusMsg.innerText = `🗑️ MINUS CART! No carriages!`;
+            updateUI();
+        }
+        
+        function tryPassCheckpoint() {
+            if (!gameAlive) return false;
+            if (currentCheckpointIdx >= checkpointRequirements.length) return true;
+            if (checkpointPassed[currentCheckpointIdx]) return true;
+            if (checkpointEvaluationLock) return false;
+            let req = checkpointRequirements[currentCheckpointIdx];
+            let cnt = countItems();
+            let ok = (cnt.wood >= req.wood && cnt.gold >= req.gold && cnt.silver >= req.silver && cnt.bomb >= req.bomb);
+            if (ok) {
+                checkpointEvaluationLock = true;
+                checkpointPassed[currentCheckpointIdx] = true;
+                let bonus = 100 + currentCheckpointIdx * 25;
+                score += bonus;
+                consumeCheckpointItems(req);
+                gameStatusMsg.innerText = `🎉 CHECKPOINT ${currentCheckpointIdx+1} PASSED! +${bonus} pts! 🎉`;
+                currentCheckpointIdx++;
+                if (currentCheckpointIdx >= checkpointRequirements.length) {
+                    checkpointRequirements.push(generateCheckpointForIndex(currentCheckpointIdx));
+                    checkpointPassed.push(false);
+                }
+                updateUI();
+                initAudio(); playCheckpointSound();
+                if (gameMode === 'endless') checkpointTimer = checkpointTimeBase;
+                checkpointEvaluationLock = false;
+                return true;
+            }
+            return false;
+        }
+        
+        function failCheckpointOnTimer() {
+            if (!gameAlive) return;
+            if (gameMode !== 'endless') return;
+            if (currentCheckpointIdx >= checkpointRequirements.length) return;
+            if (checkpointPassed[currentCheckpointIdx]) return;
+            if (checkpointTimer <= 0) {
+                let req = checkpointRequirements[currentCheckpointIdx];
+                let cnt = countItems();
+                saveHighScore(Math.floor(score), currentDifficulty);
+                gameAlive = false;
+                gameOverReason = `💀 GAME OVER! Failed checkpoint ${currentCheckpointIdx+1}\nRequired: ${req.desc}\nYou had: ${cnt.wood}🪵 ${cnt.gold}🪙 ${cnt.silver}⚪ ${cnt.bomb}💣\nFinal Score: ${Math.floor(score)}`;
+                gameStatusMsg.innerText = gameOverReason;
+                initAudio(); playGameOverSound();
+            }
+        }
+        
+        function winAtStation() {
+            if (!gameAlive) return;
+            let iceCount = countItems().ice;
+            let mult = iceCount + 1;
+            let bonus = Math.floor(score * 0.3);
+            let multBonus = bonus * mult;
+            score += multBonus;
+            updateUI();
+            saveHighScore(Math.floor(score), currentDifficulty);
+            gameAlive = false;
+            gameOverReason = `🎉 STATION REACHED! 🎉\n❄️ ${iceCount} ICE → ${mult}x multiplier!\nBonus: ${bonus} x ${mult} = +${multBonus}\nFinal Score: ${Math.floor(score)}`;
+            gameStatusMsg.innerText = gameOverReason;
+            initAudio(); playCheckpointSound();
+            setTimeout(() => {
+                if (!gameAlive && !waitingForChoice) showEndlessChoiceModal();
+            }, 1500);
+        }
+        
+        function showEndlessChoiceModal() {
+            waitingForChoice = true;
+            const modal = document.createElement('div');
+            modal.className = 'choice-modal';
+            modal.innerHTML = `
+                <div class="choice-menu">
+                    <h2>🏁 STATION REACHED! 🏁</h2>
+                    <p>Final Score: ${Math.floor(score)}</p>
+                    <div class="choice-buttons">
+                        <button class="choice-btn station">🏆 FINISH (Save Score)</button>
+                        <button class="choice-btn endless">🔄 ENDLESS MODE (Continue)</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            modal.querySelector('.station').onclick = () => {
+                document.body.removeChild(modal);
+                waitingForChoice = false;
+                gameStatusMsg.innerText = gameOverReason + " | Press RESTART to play again";
+            };
+            modal.querySelector('.endless').onclick = () => {
+                document.body.removeChild(modal);
+                waitingForChoice = false;
+                startEndlessMode();
+            };
+        }
+        
+        function startEndlessMode() {
+            gameMode = 'endless';
+            gameAlive = true;
+            gameOverReason = "";
+            checkpointTimer = checkpointTimeBase;
+            checkpointTimerDisplay.innerHTML = `⏱️ ${Math.ceil(checkpointTimeBase)}s`;
+            checkpointTimerDisplay.style.animation = "none";
+            gameStatusMsg.innerText = "🔄 ENDLESS MODE! Keep passing checkpoints! ❄️ ICE = multiplier!";
+            updateUI();
+            inspectorTimer = INSPECTOR_INTERVAL_FRAMES - 10;
+            hijackerSpawnDelay = 15;
+        }
+        
+        function hijackerHit(h) {
+            if (!gameAlive) return;
+            initAudio(); playHijackerSound();
+            if (towerBlocks.length === 0) gameStatusMsg.innerText = "🏴‍☠️ HIJACKER MISSED!";
+            else { let r = Math.min(5, towerBlocks.length); removeTowerBlocks(r); gameStatusMsg.innerText = `🏴‍☠️ HIJACKER STOLE ${r} ITEMS!`; }
+            hijackerHitWarning = true;
+            setTimeout(() => hijackerHitWarning=false, 600);
+            let idx = hijackerList.indexOf(h);
+            if (idx !== -1) hijackerList.splice(idx,1);
+        }
+        
+        function trySpawnHijacker() {
+            if (!gameAlive) return;
+            if (hijackerSpawnDelay <= 0) {
+                if (Math.random() < hijackerSpawnChance) {
+                    let vel = hijackerBaseVel + Math.random()*0.8;
+                    hijackerList.push({ id: nextHijackerId++, x: 40+Math.random()*(W-HIJACKER_W-80), y: CARGO_SPAWN_Y-20, type: TYPES.HIJACKER, w: HIJACKER_W, h: HIJACKER_H, velY: vel, originalVel: vel, speedMult: speedMultiplier });
+                }
+                hijackerSpawnDelay = 28 + Math.floor(Math.random()*25);
+            } else hijackerSpawnDelay--;
+        }
+        
+        function updateHijackers() {
+            for (let i=0; i<hijackerList.length; i++) {
+                let h = hijackerList[i];
+                h.y += h.velY;
+                let collide = false;
+                let left=trainX, right=trainX+100, top=TRAIN_Y, bot=TRAIN_Y+45;
+                if (right>h.x && left<h.x+HIJACKER_W && bot>h.y && top<h.y+HIJACKER_H) collide=true;
+                if (!collide) {
+                    for (let ci=1; ci<=carriageCount; ci++) {
+                        let cx = trainX - (ci*(CARRIAGE_W+6));
+                        if (cx+CARRIAGE_W > h.x && cx < h.x+HIJACKER_W && TRAIN_Y+10 < h.y+HIJACKER_H && TRAIN_Y+CARRIAGE_H > h.y) { collide=true; break; }
+                    }
+                }
+                if (collide) { hijackerHit(h); i--; continue; }
+                if (h.y+HIJACKER_H > TRAIN_Y+120) { hijackerList.splice(i,1); i--; }
+            }
+        }
+        
+        // INSPECTOR: removes ALL ice (no fine, just confiscation)
+        function triggerInspector() {
+            if (!gameAlive) return;
+            initAudio(); playInspectorSound();
+            let iceCount = countItems().ice;
+            if (iceCount > 0) {
+                removeAllIce();
+                gameStatusMsg.innerText = `👮 INSPECTOR CONFISCATED ${iceCount} ICE BLOCKS!`;
+                updateUI();
+            } else {
+                gameStatusMsg.innerText = "👮 INSPECTOR: No ice found! Safe passage!";
+            }
+            inspectorWarning = true;
+            setTimeout(()=>inspectorWarning=false,700);
+            inspectorTimer = INSPECTOR_INTERVAL_FRAMES;
+        }
+        
+        function collectCargo(cargo, collisionX) {
+            if (!gameAlive) return;
+            initAudio(); playCollectSound();
+            if (cargo.type === TYPES.WOOD) score += 1;
+            else if (cargo.type === TYPES.GOLD) score += 3;
+            else if (cargo.type === TYPES.SILVER) score += 2;
+            else if (cargo.type === TYPES.BOMB) score -= 2;
+            else if (cargo.type === TYPES.POWERUP_CARRIAGE) { score += 2; carriageCount++; gameStatusMsg.innerText = `🚃 NEW CARRIAGE! (${carriageCount})`; }
+            else if (cargo.type === TYPES.MINUS_CART) { score -= 3; applyMinusCart(); return; }
+            else if (cargo.type === TYPES.ICE) { slowUntil = performance.now() + 3000; gameStatusMsg.innerText = "❄️ ICE! Slowed! (Multiplier!)"; }
+            addTowerBlock(cargo.type, collisionX);
+            updateUI();
+            tryPassCheckpoint();
+            let el = null;
+            if (cargo.type === TYPES.WOOD) el = liveWoodSpan;
+            else if (cargo.type === TYPES.GOLD) el = liveGoldSpan;
+            else if (cargo.type === TYPES.SILVER) el = liveSilverSpan;
+            else if (cargo.type === TYPES.BOMB) el = liveBombSpan;
+            else if (cargo.type === TYPES.ICE) el = liveIceSpan;
+            else if (cargo.type === TYPES.POWERUP_CARRIAGE) el = liveCarriageSpan;
+            if (el) {
+                el.style.transition = "0.08s";
+                el.style.transform = "scale(1.3)";
+                el.style.color = "#ffaa66";
+                setTimeout(() => { el.style.transform = "scale(1)"; el.style.color = "#ffcc66"; }, 100);
+            }
+        }
+        
+        function tryAutoCollectCargo(c) {
+            if (!gameAlive) return false;
+            let cx = c.x + CARGO_W/2;
+            let left=trainX, right=trainX+100, top=TRAIN_Y, bot=TRAIN_Y+45;
+            if (right>c.x && left<c.x+CARGO_W && bot>c.y && top<c.y+CARGO_H) { collectCargo(c, cx); return true; }
+            for (let i=1; i<=carriageCount; i++) {
+                let cx2 = trainX - (i*(CARRIAGE_W+6));
+                if (cx2+CARRIAGE_W > c.x && cx2 < c.x+CARGO_W && TRAIN_Y+10 < c.y+CARGO_H && TRAIN_Y+CARRIAGE_H > c.y) { collectCargo(c, cx); return true; }
+            }
+            return false;
+        }
+        
+        // UPDATED SPAWN RATES: GOLD IS MORE COMMON (30% chance)
+        function trySpawnCargo() {
+            if (!gameAlive) return;
+            if (spawnDelay <= 0) {
+                let r = Math.random();
+                let type;
+                let minus = 0.03 + minusCartChanceBonus;
+                // Wood: 28%, Gold: 30% (MORE COMMON), Silver: 15%, Bomb: 12%, Ice: 6%, Carriage: 4%, Minus: rest
+                if (r < 0.28) type = TYPES.WOOD;
+                else if (r < 0.58) type = TYPES.GOLD;   // 30% gold!
+                else if (r < 0.73) type = TYPES.SILVER;
+                else if (r < 0.85) type = TYPES.BOMB;
+                else if (r < 0.91) type = TYPES.ICE;
+                else if (r < 0.95 - minusCartChanceBonus) type = TYPES.POWERUP_CARRIAGE;
+                else type = TYPES.MINUS_CART;
+                let vel = cargoBaseVel + Math.random()*1.2;
+                cargoList.push({ id: nextId++, x: 30+Math.random()*(W-CARGO_W-60), y: CARGO_SPAWN_Y, type, w: CARGO_W, h: CARGO_H, velY: vel, originalVel: vel, speedMult: speedMultiplier });
+                let adj = Math.max(8, Math.floor(BASE_SPAWN_DELAY / speedMultiplier));
+                spawnDelay = adj + Math.floor(Math.random()*15);
+            } else spawnDelay--;
+        }
+        
+        function updateCargo() {
+            for (let i=0; i<cargoList.length; i++) {
+                let c = cargoList[i];
+                c.y += c.velY;
+                if (tryAutoCollectCargo(c)) { cargoList.splice(i,1); i--; continue; }
+                if (c.y + CARGO_H > TRAIN_Y + 100) { cargoList.splice(i,1); i--; }
+            }
+        }
+        
+        function updateCheckpointTimer(delta) {
+            if (!gameAlive) return;
+            if (gameMode !== 'endless') {
+                checkpointTimerDisplay.innerHTML = "⏱️ STATION MODE";
+                return;
+            }
+            if (currentCheckpointIdx >= checkpointRequirements.length) { checkpointTimerDisplay.innerHTML = "🏆 ENDLESS!"; return; }
+            if (checkpointTimer > 0) { checkpointTimer -= delta; if (checkpointTimer < 0) checkpointTimer = 0; }
+            if (checkpointTimer <= 0 && !checkpointPassed[currentCheckpointIdx]) failCheckpointOnTimer();
+            let rem = Math.ceil(checkpointTimer);
+            checkpointTimerDisplay.innerHTML = `⏱️ ${rem}s`;
+            if (rem <= 5 && rem > 0) checkpointTimerDisplay.style.animation = "pulse 0.5s infinite";
+            else checkpointTimerDisplay.style.animation = "none";
+        }
+        
+        function updateTrainMovement(now) {
+            let sp = trainSpeed;
+            if (slowUntil > now) { sp = trainSpeed * 0.4; slowTimerSpan.innerText = ((slowUntil-now)/1000).toFixed(1); }
+            else slowTimerSpan.innerText = "0.0";
+            if (moveLeft) trainX -= sp;
+            if (moveRight) trainX += sp;
+            trainX = Math.min(Math.max(trainX, 15), W-115);
+            reorderTowerPositions();
+        }
+        
+        function updateTimers() {
+            if (!gameAlive) return;
+            if (inspectorTimer <= 0) triggerInspector();
+            else inspectorTimer--;
+        }
+        
+        let stationTimer = 60.0;
+        function updateStationTimer(delta) {
+            if (!gameAlive) return;
+            if (gameMode !== 'station') return;
+            stationTimer -= delta;
+            if (stationTimer <= 0) winAtStation();
+            let rem = Math.ceil(stationTimer);
+            checkpointTimerDisplay.innerHTML = `⏱️ ${rem}s`;
+            if (rem <= 5 && rem > 0) checkpointTimerDisplay.style.animation = "pulse 0.5s infinite";
+            else checkpointTimerDisplay.style.animation = "none";
+        }
+        
+        function draw() {
+            ctx.clearRect(0,0,W,H);
+            ctx.fillStyle = "#ebc28e"; ctx.fillRect(0,0,W,H);
+            ctx.fillStyle = "#d6a15a"; for(let i=0;i<12;i++) ctx.fillRect(0, H-90+i*6, W, 4);
+            ctx.fillStyle = "#a56b2f";
+            ctx.beginPath(); ctx.moveTo(0,240); ctx.lineTo(150,180); ctx.lineTo(280,210); ctx.lineTo(420,150);
+            ctx.lineTo(580,190); ctx.lineTo(760,130); ctx.lineTo(920,180); ctx.lineTo(W,140);
+            ctx.lineTo(W,280); ctx.lineTo(0,280); ctx.fill();
+            ctx.fillStyle = "#7e4a23"; ctx.fillRect(0, H-70, W, 70);
+            ctx.fillStyle = "#4a3320"; for(let i=0;i<W;i+=30) ctx.fillRect(i, TRAIN_Y+20, 18, 6);
+            ctx.fillStyle = "#705030"; ctx.fillRect(0, TRAIN_Y+22, W, 5);
+            
+            for(let h of hijackerList) {
+                ctx.fillStyle = "#8b0000"; ctx.fillRect(h.x, h.y, HIJACKER_W, HIJACKER_H);
+                ctx.fillStyle = "#ff4444"; ctx.font = "34px monospace"; ctx.fillText("🏴‍☠️", h.x+8, h.y+36);
+                ctx.fillStyle = "#fff"; ctx.font = "bold 12px monospace"; ctx.fillText("DODGE!", h.x+12, h.y+20);
+            }
+            for(let c of cargoList) {
+                ctx.fillStyle = c.type.color; ctx.fillRect(c.x, c.y, CARGO_W, CARGO_H);
+                ctx.strokeStyle = "#2f2216"; ctx.strokeRect(c.x, c.y, CARGO_W, CARGO_H);
+                ctx.font = "22px monospace"; ctx.fillStyle = "#111";
+                ctx.fillText(c.type.symbol, c.x+5, c.y+26);
+                if (c.type === TYPES.MINUS_CART) { ctx.fillStyle = "#aa6644"; ctx.font = "16px monospace"; ctx.fillText("-1", c.x+12, c.y+15); }
+            }
+            for(let i=1; i<=carriageCount; i++) {
+                let cx = trainX - (i*(CARRIAGE_W+6));
+                ctx.fillStyle = "#8b6946"; ctx.fillRect(cx, TRAIN_Y+5, CARRIAGE_W, CARRIAGE_H);
+                ctx.fillStyle = "#c99242"; ctx.fillRect(cx+10, TRAIN_Y-8, 20, 14);
+                ctx.fillStyle = "#5a3a1a";
+                ctx.beginPath(); ctx.arc(cx+12, TRAIN_Y+CARRIAGE_H-4, 6, 0, Math.PI*2);
+                ctx.arc(cx+CARRIAGE_W-12, TRAIN_Y+CARRIAGE_H-4, 6, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = "#ffd966"; ctx.font = "20px monospace"; ctx.fillText("🚃", cx+25, TRAIN_Y+32);
+            }
+            ctx.fillStyle = "#6b3e1c"; ctx.fillRect(trainX, TRAIN_Y, 100, 45);
+            ctx.fillStyle = "#b57a3b"; ctx.fillRect(trainX+10, TRAIN_Y-12, 30, 14);
+            ctx.fillStyle = "#473018"; ctx.fillRect(trainX+15, TRAIN_Y-6, 8, 8); ctx.fillRect(trainX+28, TRAIN_Y-6, 8, 8);
+            ctx.fillStyle = "#eba85c"; for(let i=0;i<3;i++) ctx.fillRect(trainX+12+i*25, TRAIN_Y+10, 12, 18);
+            ctx.fillStyle = "#1e1309";
+            ctx.beginPath(); ctx.arc(trainX+15, TRAIN_Y+40, 8, 0, Math.PI*2); ctx.arc(trainX+85, TRAIN_Y+40, 8, 0, Math.PI*2); ctx.fill();
+            for(let b of towerBlocks) {
+                ctx.fillStyle = b.type.towerColor; ctx.fillRect(b.x, b.y, 22, 16);
+                ctx.fillStyle = "#2a1a0a"; ctx.strokeRect(b.x, b.y, 22, 16);
+                ctx.font = "14px monospace"; ctx.fillStyle = "#fff2cc"; ctx.fillText(b.type.symbol, b.x+3, b.y+12);
+            }
+            if(inspectorWarning) { ctx.fillStyle = "#ffaa44cc"; ctx.font = "bold 28px monospace"; ctx.fillText("👮 INSPECTOR! ICE REMOVED!", W/2-170, 45); }
+            if(hijackerHitWarning) { ctx.fillStyle = "#ff0000cc"; ctx.font = "bold 28px monospace"; ctx.fillText("🏴‍☠️ HIJACKER STRUCK!", W/2-140, 85); }
+            if(!gameAlive && !waitingForChoice) {
+                ctx.fillStyle = "#000000aa"; ctx.fillRect(0,0,W,H);
+                ctx.fillStyle = "#ffcc88"; ctx.font = "bold 26px monospace";
+                let lines = gameOverReason.split('\n');
+                for(let i=0;i<lines.length;i++) ctx.fillText(lines[i], W/2-250, H/2-20+i*38);
+                ctx.font = "22px monospace"; ctx.fillText("PRESS RESTART", W/2-80, H/2+90);
+            }
+        }
+        
+        let lastFrame=0;
+        function gameLoop(now) {
+            if(!lastFrame) lastFrame=now;
+            let delta = Math.min(0.033, (now-lastFrame)/1000);
+            lastFrame=now;
+            if(gameAlive && !waitingForChoice) {
+                updateTrainMovement(now);
+                if (gameMode === 'station') updateStationTimer(delta);
+                else updateCheckpointTimer(delta);
+                trySpawnCargo();
+                trySpawnHijacker();
+                updateCargo();
+                updateHijackers();
+                updateTimers();
+                tryPassCheckpoint();
+            }
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function setMoveLeft(s) { moveLeft=s; }
+        function setMoveRight(s) { moveRight=s; }
+        document.getElementById('leftBtn').onmousedown = ()=>setMoveLeft(true);
+        document.getElementById('leftBtn').onmouseup = ()=>setMoveLeft(false);
+        document.getElementById('leftBtn').onmouseleave = ()=>setMoveLeft(false);
+        document.getElementById('rightBtn').onmousedown = ()=>setMoveRight(true);
+        document.getElementById('rightBtn').onmouseup = ()=>setMoveRight(false);
+        document.getElementById('rightBtn').onmouseleave = ()=>setMoveRight(false);
+        document.getElementById('leftBtn').ontouchstart = (e)=>{e.preventDefault(); setMoveLeft(true);};
+        document.getElementById('leftBtn').ontouchend = ()=>setMoveLeft(false);
+        document.getElementById('rightBtn').ontouchstart = (e)=>{e.preventDefault(); setMoveRight(true);};
+        document.getElementById('rightBtn').ontouchend = ()=>setMoveRight(false);
+        window.onkeydown = (e) => {
+            if(e.key === 'ArrowLeft' || e.key === 'a') { setMoveLeft(true); e.preventDefault(); }
+            if(e.key === 'ArrowRight' || e.key === 'd') { setMoveRight(true); e.preventDefault(); }
+        };
+        window.onkeyup = (e) => {
+            if(e.key === 'ArrowLeft' || e.key === 'a') setMoveLeft(false);
+            if(e.key === 'ArrowRight' || e.key === 'd') setMoveRight(false);
+        };
+        
+        function resetGame() {
+            gameAlive = true;
+            gameMode = 'station';
+            waitingForChoice = false;
+            score = 0;
+            towerBlocks = [];
+            carriageCount = 0;
+            cargoList = [];
+            hijackerList = [];
+            trainX = W/2 - 60;
+            slowUntil = 0;
+            stationTimer = 60.0;
+            checkpointTimer = checkpointTimeBase;
+            currentCheckpointIdx = 0;
+            initCheckpoints();
+            inspectorTimer = INSPECTOR_INTERVAL_FRAMES - 10;
+            hijackerSpawnDelay = 15;
+            spawnDelay = 5;
+            gameOverReason = "";
+            checkpointEvaluationLock = false;
+            updateUI();
+            checkpointTimerDisplay.innerHTML = `⏱️ 60s`;
+            checkpointTimerDisplay.style.animation = "none";
+            updateSpeedMultiplier();
+            gameStatusMsg.innerText = "🪙 GOLD IS MORE COMMON (30% spawn)! | ✨ Silver in checkpoints | 👮 Inspector removes ALL ice";
+        }
+        
+        document.getElementById('easyModeBtn').onclick = () => { if (currentDifficulty === 'easy') return; currentDifficulty = 'easy'; applyDifficultySettings(); resetGame(); };
+        document.getElementById('hardModeBtn').onclick = () => { if (currentDifficulty === 'hard') return; currentDifficulty = 'hard'; applyDifficultySettings(); resetGame(); };
+        document.getElementById('resetGameBtn').onclick = () => { resetGame(); };
+        
+        loadHighScores();
+        applyDifficultySettings();
+        initCheckpoints();
+        resetGame();
+        updateSpeedMultiplier();
+        requestAnimationFrame(gameLoop);
+    })();
+</script>
+</body>
+</html>

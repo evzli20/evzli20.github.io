@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>City Builder – Detailed Buildings | Bridges | Citizens & Cars</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #ui {
+            position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px); border-radius: 16px; padding: 12px 20px;
+            color: white; border-left: 4px solid #ffaa44; pointer-events: none; z-index: 10;
+            font-weight: bold;
+        }
+        #stats { display: flex; gap: 24px; flex-wrap: wrap; font-size: 14px; }
+        .stat span { color: #ffaa44; font-size: 18px; margin-left: 6px; }
+        #tools {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); border-radius: 50px;
+            padding: 10px 20px; display: flex; gap: 12px; z-index: 20;
+            border: 1px solid rgba(255,170,68,0.5); pointer-events: auto;
+            justify-content: center; align-items: center;
+            flex-wrap: wrap;
+        }
+        .tool-btn {
+            background: #2c3e50; border: none; color: white; padding: 8px 18px;
+            border-radius: 40px; font-size: 13px; font-weight: bold; cursor: pointer;
+            transition: 0.2s; font-family: inherit; display: inline-flex; align-items: center;
+            gap: 6px; white-space: nowrap;
+        }
+        .tool-btn.active { background: #ffaa44; color: #1a1a2e; box-shadow: 0 0 10px #ffaa44; }
+        .tool-btn.road-btn { background: #5a626e; }
+        .tool-btn.del-btn { background: #a53f2b; }
+        .tool-btn.inspect-btn { background: #2c6e2c; }
+        .dropdown-group {
+            display: inline-flex; align-items: center; gap: 5px;
+            background: rgba(0,0,0,0.5); padding: 4px 10px; border-radius: 40px;
+        }
+        .dropdown-group label { font-size: 12px; color: #ffaa44; font-weight: bold; white-space: nowrap; }
+        select {
+            background: #2c3e50; border: none; color: white; padding: 6px 12px;
+            border-radius: 40px; font-size: 13px; font-weight: bold; cursor: pointer;
+            font-family: inherit; outline: none; min-width: 120px;
+        }
+        @media (max-width: 1000px) {
+            select { min-width: 110px; font-size: 12px; }
+            .tool-btn { padding: 6px 12px; font-size: 12px; }
+        }
+        @media (max-width: 800px) {
+            #tools { flex-wrap: wrap; }
+            select { min-width: 100px; font-size: 11px; }
+            .dropdown-group label { font-size: 10px; }
+        }
+        #current-tool-label { font-size: 12px; background: rgba(0,0,0,0.5); padding: 4px 12px; border-radius: 20px; color: #ffaa44; margin-left: 10px; white-space: nowrap; }
+        #mute-btn { background: #2c3e50; border: none; color: white; padding: 6px 12px; border-radius: 40px; font-size: 12px; cursor: pointer; margin-left: 10px; }
+        #info { position: absolute; bottom: 20px; right: 20px; background: rgba(0,0,0,0.6); padding: 6px 12px; border-radius: 8px; font-size: 12px; color: #ccc; pointer-events: none; font-family: monospace; }
+        #tooltip { position: absolute; background: rgba(0,0,0,0.85); color: #ffdd99; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; pointer-events: none; z-index: 100; white-space: nowrap; backdrop-filter: blur(4px); border: 1px solid #ffaa44; display: none; }
+        .event-notification { position: absolute; background: rgba(0,0,0,0.8); color: #ffaa44; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; pointer-events: none; z-index: 200; white-space: nowrap; animation: fadeOut 2s forwards; }
+        @keyframes fadeOut { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-20px); } }
+    </style>
+</head>
+<body>
+<div id="ui"><div id="stats">
+    <div class="stat">💰 <span id="money">50000</span></div>
+    <div class="stat">🏠 <span id="population">0</span></div>
+    <div class="stat">😊 <span id="happiness">50</span>%</div>
+    <div class="stat">🏙️ <span id="buildings">0</span></div>
+    <div class="stat">🌳 <span id="parks">0</span></div>
+    <div class="stat">💧 <span id="fountains">0</span></div>
+    <div class="stat">🚰 <span id="waterpumps">0</span></div>
+    <div class="stat">🎣 <span id="piers">0</span></div>
+    <div class="stat">👮 <span id="police">0</span></div>
+    <div class="stat">🔥 <span id="fire">0</span></div>
+    <div class="stat">📚 <span id="schools">0</span></div>
+    <div class="stat">🏥 <span id="hospitals">0</span></div>
+    <div class="stat">📖 <span id="libraries">0</span></div>
+    <div class="stat">⚡ <span id="powerplants">0</span></div>
+    <div class="stat">🚗 <span id="cars">0</span></div>
+    <div class="stat">🚶 <span id="citizens">0</span></div>
+</div></div>
+<div id="tools">
+    <button id="btnRoad" class="tool-btn road-btn">🛣️ Road<span style="font-size:10px; margin-left:4px;">$25</span></button>
+    <button id="btnDel" class="tool-btn del-btn">💥 Demolish<span style="font-size:10px; margin-left:4px;">refund</span></button>
+    <button id="btnInspect" class="tool-btn inspect-btn">🔍 Inspect (no build)</button>
+    <div class="dropdown-group"><label>🏘️ Zones</label><select id="zone-select"><option value="residential">🏘️ House ($100)</option><option value="commercial">🏪 Store ($100)</option><option value="industrial">🏭 Factory ($100)</option></select></div>
+    <div class="dropdown-group"><label>🌿 Parks & Nature</label><select id="nature-select"><option value="park">🌳 Park (2x2) ($400)</option><option value="fountain">💧 Fountain ($150)</option><option value="waterpump">🚰 Water Pump ($200)</option><option value="pier">🎣 Fishing Pier (2x1) ($300)</option></select></div>
+    <div class="dropdown-group"><label>🏛️ Services & Civic</label><select id="civic-service-select"><option value="police">👮 Police (2x1) ($500)</option><option value="fire">🔥 Fire (2x1) ($500)</option><option value="school">🏫 School (2x2) ($600)</option><option value="hospital">🏥 Hospital (2x2) ($700)</option><option value="library">📖 Library (1x1) ($250)</option><option value="powerplant">⚡ Power Plant (2x2) ($800)</option></select></div>
+    <div id="current-tool-label"></div>
+    <button id="mute-btn">🔊 Mute</button>
+</div>
+<div id="info">✨ Trees perfectly centered on each park tile | Bridges | Citizens & cars ✨</div>
+<div id="tooltip"></div>
+
+<script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.128.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+// --- Audio ---
+let audioCtx = null, muted = false;
+const muteBtn = document.getElementById('mute-btn');
+function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+function playSound(type) {
+    if (muted || !audioCtx) return;
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    if (type === 'build') { osc.frequency.value = 660; gain.gain.setValueAtTime(0.15, now); gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08); osc.start(); osc.stop(now + 0.08); }
+    else if (type === 'footstep') { osc.frequency.value = 330; gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05); osc.start(); osc.stop(now + 0.05); }
+}
+muteBtn.addEventListener('click', () => { muted = !muted; muteBtn.textContent = muted ? '🔇 Unmute' : '🔊 Mute'; if (!audioCtx && !muted) initAudio(); });
+window.addEventListener('click', () => { if (!audioCtx && !muted) initAudio(); }, { once: true });
+
+// --- Scene ---
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a1030);
+scene.fog = new THREE.FogExp2(0x0a1030, 0.005);
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(15, 12, 18);
+camera.lookAt(0, 0, 0);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(window.innerWidth, window.innerHeight);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0px';
+labelRenderer.domElement.style.left = '0px';
+labelRenderer.domElement.style.pointerEvents = 'none';
+document.body.appendChild(labelRenderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.05; controls.screenSpacePanning = true; controls.maxPolarAngle = Math.PI / 2.3;
+
+// --- Lighting ---
+scene.add(new THREE.AmbientLight(0x404060));
+const sun = new THREE.DirectionalLight(0xfff5d1, 1.2); sun.position.set(10, 20, 5); sun.castShadow = true; sun.shadow.mapSize.width = 1024; sun.shadow.mapSize.height = 1024; scene.add(sun);
+scene.add(new THREE.PointLight(0x5577aa, 0.4).position.set(0,5,0));
+scene.add(new THREE.PointLight(0xffaa66, 0.3).position.set(-5,8,-8));
+
+// --- Ground with 0.5 grid lines (1x1 cells) ---
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x4a8c3f, roughness: 0.9 });
+const groundPlane = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), groundMat);
+groundPlane.rotation.x = -Math.PI / 2; groundPlane.position.y = -0.2; groundPlane.receiveShadow = true;
+scene.add(groundPlane);
+const gridHelper = new THREE.GridHelper(20, 40, 0x88aaff, 0x88aaff);
+gridHelper.position.y = -0.08;
+gridHelper.material.transparent = true;
+gridHelper.material.opacity = 0.5;
+scene.add(gridHelper);
+
+// --- Water: 1 river + 2 lakes ---
+const waterCells = new Set();
+function addWaterTile(x,z) {
+    if (x < -10 || x > 10 || z < -10 || z > 10) return;
+    const key = `${x},${z}`;
+    if (waterCells.has(key)) return;
+    waterCells.add(key);
+    const waterMat = new THREE.MeshStandardMaterial({ color: 0x3399ff, roughness: 0.2, metalness: 0.9, emissive: 0x004466 });
+    const waterPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.96, 0.96), waterMat);
+    waterPlane.rotation.x = -Math.PI / 2; waterPlane.position.set(x, -0.15, z); waterPlane.receiveShadow = true;
+    scene.add(waterPlane);
+    const rippleMat = new THREE.MeshStandardMaterial({ color: 0x88ccff, transparent: true, opacity: 0.3 });
+    const ripple = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), rippleMat);
+    ripple.rotation.x = -Math.PI / 2; ripple.position.set(x, -0.12, z);
+    scene.add(ripple);
+}
+// River
+for (let x = -9; x <= 9; x += 0.6) {
+    let z = Math.sin(x * 0.6) * 2.0 + Math.sin(x * 1.3) * 0.6;
+    z = Math.min(8, Math.max(-8, Math.round(z)));
+    for (let dx = -1; dx <= 1; dx++) addWaterTile(Math.round(x), z);
+}
+// Lake 1
+for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) if (Math.hypot(dx,dz) <= 1.8) addWaterTile(-4 + dx, 4 + dz);
+// Lake 2
+for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) if (Math.hypot(dx,dz) <= 2.0) addWaterTile(5 + dx, -3 + dz);
+
+// --- Game Data ---
+const roads = new Map();
+const zones = new Map();
+const zoneMarkers = new Map();
+const buildings = new Map();
+const buildingMeshes = [];
+const parks = new Map(); let nextParkId = 1; const parkObjects = new Map();
+const fountains = new Map();
+const waterPumps = new Map();
+const piers = new Map(); let nextPierId = 1; const pierObjects = new Map();
+const services = new Map(); let nextServiceId = 1; const serviceObjects = new Map();
+const schools = new Map(); let nextSchoolId = 1; const schoolObjects = new Map();
+const hospitals = new Map(); let nextHospitalId = 1; const hospitalObjects = new Map();
+const libraries = new Map(); let nextLibraryId = 1; const libraryObjects = new Map();
+const powerPlants = new Map(); let nextPowerPlantId = 1; const powerPlantObjects = new Map();
+
+let cars = [], citizens = [];
+let money = 50000, totalPop = 0, happiness = 50;
+let currentTool = 'road', currentRotation = 0;
+let lastFrameTime = performance.now(), lastCarSpawn = 0, lastCitizenSpawn = 0;
+
+const ROAD_COST = 25, ZONE_COST = 100, PARK_COST = 400, PARK_HAPPINESS = 12, FOUNTAIN_COST = 150, FOUNTAIN_HAPPINESS = 8, WATER_PUMP_COST = 200, WATER_PUMP_HAPPINESS = 5, WATER_PUMP_INCOME = 5, PIER_COST = 300, PIER_HAPPINESS = 8, PIER_INCOME = 6, SERVICE_COST = 500, SERVICE_HAPPINESS = 10, SERVICE_MAINTENANCE = 20;
+const SCHOOL_COST = 600, SCHOOL_HAPPINESS = 12, SCHOOL_MAINTENANCE = 15;
+const HOSPITAL_COST = 700, HOSPITAL_HAPPINESS = 15, HOSPITAL_MAINTENANCE = 25;
+const LIBRARY_COST = 250, LIBRARY_HAPPINESS = 8, LIBRARY_MAINTENANCE = 5;
+const POWERPLANT_COST = 800, POWERPLANT_HAPPINESS = -5, POWERPLANT_INCOME = 40, POWERPLANT_MAINTENANCE = 35;
+
+const ZONE_COLORS = { residential: 0x6fbf73, commercial: 0x5b9bd5, industrial: 0xd97c2b };
+const BUILDING_DATA = {
+    residential: { name: 'House', basePop: [0,8,16,28], baseIncome: [0,2,6,12], color: 0x6fbf73, heights: [0.2,0.7,1.0,1.3], roofColor: 0xbc9a6c },
+    commercial: { name: 'Store', basePop: [0,3,8,15], baseIncome: [0,5,12,25], color: 0x5b9bd5, heights: [0.2,0.9,1.3,1.7], roofColor: 0x3a6ea5 },
+    industrial: { name: 'Factory', basePop: [0,1,4,10], baseIncome: [0,8,18,32], color: 0xd97c2b, heights: [0.2,0.8,1.2,1.5], roofColor: 0x8b5a2b, happinessPenalty: [-1,-2,-3,-4] }
+};
+const GROWTH_TIMES = { 0: 30000, 1: 60000, 2: 100000 };
+const CAR_SPEED = 2.5, CAR_SPAWN_INTERVAL = 2500, MAX_CARS = 25;
+const CITIZEN_SPEED = 1.2;
+let MAX_CITIZENS = 20, CITIZEN_SPAWN_INTERVAL = 7000;
+
+function getKey(x,z) { return `${x},${z}`; }
+function isRoad(x,z) { return roads.has(getKey(x,z)); }
+function isZone(x,z) { return zones.has(getKey(x,z)); }
+function isPark(x,z) { return parks.has(getKey(x,z)); }
+function isFountain(x,z) { return fountains.has(getKey(x,z)); }
+function isWaterPump(x,z) { return waterPumps.has(getKey(x,z)); }
+function isPier(x,z) { return piers.has(getKey(x,z)); }
+function isService(x,z) { return services.has(getKey(x,z)); }
+function isSchool(x,z) { return schools.has(getKey(x,z)); }
+function isHospital(x,z) { return hospitals.has(getKey(x,z)); }
+function isLibrary(x,z) { return libraries.has(getKey(x,z)); }
+function isPowerPlant(x,z) { return powerPlants.has(getKey(x,z)); }
+function isWater(x,z) { return waterCells.has(getKey(x,z)); }
+function isOccupied(x,z) { return isRoad(x,z)||isZone(x,z)||isPark(x,z)||isFountain(x,z)||isWaterPump(x,z)||isPier(x,z)||isService(x,z)||isSchool(x,z)||isHospital(x,z)||isLibrary(x,z)||isPowerPlant(x,z); }
+function hasRoadAdjacent(x,z) { for (let [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]) if (isRoad(x+dx,z+dz)) return true; return false; }
+function getRoadNeighbors(x,z) { let n=[]; for (let [dx,dz] of [[0,1],[0,-1],[1,0],[-1,0]]) if (isRoad(x+dx,z+dz)) n.push([x+dx,z+dz]); return n; }
+function findPath(sx,sz,ex,ez) {
+    let q=[[sx,sz]], from=new Map(), seen=new Set(); seen.add(getKey(sx,sz));
+    while (q.length) {
+        let [x,z]=q.shift();
+        if (x===ex && z===ez) { let path=[[ex,ez]], cur=getKey(ex,ez); while (from.has(cur)) { let p=from.get(cur); path.unshift(p); cur=getKey(p[0],p[1]); } return path; }
+        for (let [nx,nz] of getRoadNeighbors(x,z)) { let k=getKey(nx,nz); if (!seen.has(k)) { seen.add(k); from.set(k,[x,z]); q.push([nx,nz]); } }
+    }
+    return null;
+}
+function updateZoneMarker(x,z,type) {
+    let key=getKey(x,z);
+    if (zoneMarkers.has(key)) scene.remove(zoneMarkers.get(key));
+    zoneMarkers.delete(key);
+    if (type) {
+        let plane = new THREE.Mesh(new THREE.PlaneGeometry(0.96, 0.96), new THREE.MeshStandardMaterial({ color: ZONE_COLORS[type], transparent: true, opacity: 0.7 }));
+        plane.rotation.x = -Math.PI/2; plane.position.set(x,-0.03,z); scene.add(plane);
+        zoneMarkers.set(key, plane);
+    }
+}
+// --- HIGHLY DETAILED BUILDINGS ---
+function createDetailedBuilding(type, x, z, level, eventType) {
+    const d = BUILDING_DATA[type];
+    const group = new THREE.Group();
+    const tint = eventType === '🔥 Fire!' ? 0xff6633 : (eventType === '💰 Robbery!' ? 0xaa66ff : null);
+    if (level === 0) {
+        const base = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.15, 0.96), new THREE.MeshStandardMaterial({ color: tint || 0xaa8866 }));
+        base.position.y = 0.075; base.castShadow = true; group.add(base);
+    } else {
+        const height = d.heights[level];
+        const bodyMat = new THREE.MeshStandardMaterial({ color: tint || d.color });
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.96, height, 0.96), bodyMat);
+        body.position.y = height/2; body.castShadow = true; group.add(body);
+        
+        if (type === 'residential') {
+            const roof = new THREE.Mesh(new THREE.ConeGeometry(0.6, 0.45, 4), new THREE.MeshStandardMaterial({ color: d.roofColor }));
+            roof.position.y = height+0.2; group.add(roof);
+            const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.45, 0.2), new THREE.MeshStandardMaterial({ color: 0xaa8c64 }));
+            chimney.position.set(0.35, height+0.1, 0.35); group.add(chimney);
+            const door = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.05), new THREE.MeshStandardMaterial({ color: 0x8B5A2B }));
+            door.position.set(-0.25, 0.2, 0.48); group.add(door);
+            const winMat = new THREE.MeshStandardMaterial({ color: 0x88aaff });
+            const win1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.25, 0.05), winMat); win1.position.set(0.3, height*0.7, 0.48); group.add(win1);
+            const win2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.25, 0.05), winMat); win2.position.set(-0.3, height*0.7, 0.48); group.add(win2);
+            const sideWin = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.05), winMat); sideWin.position.set(0.48, height*0.6, -0.2); group.add(sideWin);
+        } 
+        else if (type === 'commercial') {
+            const roof = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.12, 0.98), new THREE.MeshStandardMaterial({ color: 0xccccdd })); roof.position.y = height+0.05; group.add(roof);
+            const awning = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.3), new THREE.MeshStandardMaterial({ color: 0xdd5533 })); awning.position.set(0, height*0.4, 0.49); group.add(awning);
+            const sign = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.15, 0.05), new THREE.MeshStandardMaterial({ color: 0xffaa55 })); sign.position.set(0, height*0.75, 0.49); group.add(sign);
+            const display = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.4, 0.05), new THREE.MeshStandardMaterial({ color: 0x88aaff, emissive: 0x224466 })); display.position.set(0, height*0.3, 0.48); group.add(display);
+        } 
+        else {
+            const roof = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.7, 0.3, 6), new THREE.MeshStandardMaterial({ color: 0xab8e5c })); roof.position.y = height+0.1; group.add(roof);
+            const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.25, 0.8, 8), new THREE.MeshStandardMaterial({ color: 0x7a5a3a })); stack.position.set(0.45, height+0.25, -0.4); group.add(stack);
+            const smokeMat = new THREE.MeshStandardMaterial({ color: 0x888888, emissive: 0x222222 });
+            const smoke = new THREE.Mesh(new THREE.SphereGeometry(0.1, 4,4), smokeMat); smoke.position.set(0.45, height+0.65, -0.4); group.add(smoke);
+            const vent = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.3), new THREE.MeshStandardMaterial({ color: 0xcc8855 })); vent.position.set(-0.45, height-0.1, 0.35); group.add(vent);
+        }
+    }
+    group.position.set(x,0,z);
+    const hoverBox = new THREE.Mesh(new THREE.BoxGeometry(0.96, 1.2, 0.96), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 })); hoverBox.position.y = 0.6; group.add(hoverBox);
+    return group;
+}
+function createLabel(type,x,z,level,percent,hasRoad,eventType) {
+    const d = BUILDING_DATA[type];
+    const evIcon = eventType === '🔥 Fire!' ? '🔥 ' : (eventType === '💰 Robbery!' ? '💰 ' : '');
+    let text = '';
+    if (!hasRoad && level<3) text = level===0 ? `🚧 ${d.name} (no road)` : `${d.name} Lv${level} (no road)`;
+    else if (level===0) text = `${evIcon}🚧 ${d.name} Lv0 → Lv1: ${percent}%`;
+    else if (level===1) text = `${evIcon}${d.name} Lv1 → Lv2: ${percent}%`;
+    else if (level===2) text = `${evIcon}${d.name} Lv2 → Lv3: ${percent}%`;
+    else text = `${evIcon}${d.name} Lv3 ✓`;
+    const div = document.createElement('div'); div.textContent = text; div.style.cssText = 'color:#ffdd99; font-size:10px; font-weight:bold; background:rgba(0,0,0,0.6); padding:2px 6px; border-radius:12px; white-space:nowrap';
+    const label = new CSS2DObject(div);
+    label.position.set(x, (level===0?0.6:d.heights[level]+0.5), z);
+    return label;
+}
+function updateBuilding(x,z,forceLevel=null,eventType=null) {
+    const key = getKey(x,z);
+    const zoneType = zones.get(key);
+    if (!zoneType) {
+        const idx = buildingMeshes.findIndex(i=>i.buildingKey===key);
+        if (idx!==-1) { scene.remove(buildingMeshes[idx].mesh); buildingMeshes.splice(idx,1); }
+        if (buildings.has(key)) { const old = buildings.get(key); scene.remove(old.mesh); if (old.label) scene.remove(old.label); buildings.delete(key); }
+        return;
+    }
+    let level = forceLevel !== null ? forceLevel : (buildings.has(key) ? buildings.get(key).level : 0);
+    if (!hasRoadAdjacent(x,z) && level>0) level = 0;
+    const mesh = createDetailedBuilding(zoneType,x,z,level,eventType);
+    const label = createLabel(zoneType,x,z,level,0,hasRoadAdjacent(x,z),eventType);
+    scene.add(mesh, label);
+    const idx = buildingMeshes.findIndex(i=>i.buildingKey===key);
+    if (idx!==-1) buildingMeshes.splice(idx,1);
+    buildingMeshes.push({mesh, buildingKey:key});
+    if (buildings.has(key)) { const old = buildings.get(key); scene.remove(old.mesh); if (old.label) scene.remove(old.label); }
+    buildings.set(key,{mesh,label,type:zoneType,level,lastUpdate:performance.now(), eventUntil:eventType?performance.now()+10000:null, eventType});
+}
+function updateAllLabels(now) { 
+    for (let [key,b] of buildings.entries()) {
+        const [x,z] = key.split(',').map(Number);
+        const hr = hasRoadAdjacent(x,z);
+        let pct = 0;
+        if (hr && b.level<3) pct = Math.min(100, Math.floor(((now - b.lastUpdate)/GROWTH_TIMES[b.level])*100));
+        let ev = b.eventType;
+        if (b.eventUntil && now > b.eventUntil) { ev = null; b.eventUntil = null; b.eventType = null; updateBuilding(x,z,b.level,null); continue; }
+        const d = BUILDING_DATA[b.type];
+        const evIcon = ev === '🔥 Fire!' ? '🔥 ' : (ev === '💰 Robbery!' ? '💰 ' : '');
+        let text = '';
+        if (!hr && b.level<3) text = b.level===0 ? `🚧 ${d.name} (no road)` : `${d.name} Lv${b.level} (no road)`;
+        else if (b.level===0) text = `${evIcon}🚧 ${d.name} Lv0 → Lv1: ${pct}%`;
+        else if (b.level===1) text = `${evIcon}${d.name} Lv1 → Lv2: ${pct}%`;
+        else if (b.level===2) text = `${evIcon}${d.name} Lv2 → Lv3: ${pct}%`;
+        else text = `${evIcon}${d.name} Lv3 ✓`;
+        b.label.element.textContent = text;
+        b.label.position.y = b.level===0 ? 0.6 : d.heights[b.level]+0.5;
+    }
+}
+function placeZone(x,z,zoneType) {
+    if (x<-10||x>10||z<-10||z>10) return false;
+    if (isOccupied(x,z)||isWater(x,z)) return false;
+    if (!hasRoadAdjacent(x,z)) return false;
+    if (money < ZONE_COST) return false;
+    money -= ZONE_COST;
+    zones.set(getKey(x,z), zoneType);
+    updateZoneMarker(x,z,zoneType);
+    updateBuilding(x,z,0);
+    playSound('build');
+    updateUI();
+    return true;
+}
+function removeZone(x,z) {
+    const key = getKey(x,z);
+    if (!zones.has(key)) return false;
+    zones.delete(key);
+    updateZoneMarker(x,z,null);
+    if (buildings.has(key)) { const b = buildings.get(key); scene.remove(b.mesh); if (b.label) scene.remove(b.label); buildings.delete(key); const idx = buildingMeshes.findIndex(i=>i.buildingKey===key); if (idx!==-1) buildingMeshes.splice(idx,1); }
+    updateUI();
+    return true;
+}
+function updateGrowth(now) {
+    for (let [key,b] of buildings.entries()) {
+        const [x,z] = key.split(',').map(Number);
+        if (!hasRoadAdjacent(x,z)) continue;
+        let nl = b.level;
+        if (b.level===0 && now-b.lastUpdate > GROWTH_TIMES[0]) nl = 1;
+        else if (b.level===1 && now-b.lastUpdate > GROWTH_TIMES[1]) nl = 2;
+        else if (b.level===2 && now-b.lastUpdate > GROWTH_TIMES[2]) nl = 3;
+        if (nl !== b.level && nl <= BUILDING_DATA[b.type].heights.length-1) { updateBuilding(x,z,nl); buildings.get(key).lastUpdate = now; }
+    }
+}
+// --- CORRECTED PARK: full grid alignment + trees centered on each tile ---
+function createParkMesh(tlX, tlZ) {
+    const group = new THREE.Group();
+    const grassMat = new THREE.MeshStandardMaterial({ color: 0x5cad3a });
+    // 4 grass tiles exactly on integer cell centers
+    const cells = [[tlX, tlZ], [tlX+1, tlZ], [tlX, tlZ+1], [tlX+1, tlZ+1]];
+    for (let [cx, cz] of cells) {
+        const tile = new THREE.Mesh(new THREE.PlaneGeometry(0.96, 0.96), grassMat);
+        tile.rotation.x = -Math.PI/2; tile.position.set(cx, -0.02, cz);
+        group.add(tile);
+    }
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B5A2B });
+    const foliageMat = new THREE.MeshStandardMaterial({ color: 0x4caf50 });
+    // Trees placed exactly at the center of each grass tile (integer coordinates)
+    const treeCenters = [[0, 0], [1, 0], [0, 1], [1, 1]];
+    for (let [ox, oz] of treeCenters) {
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.5, 6), trunkMat);
+        trunk.position.set(tlX + ox, 0.25, tlZ + oz);
+        const foliage = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.5, 8), foliageMat);
+        foliage.position.set(tlX + ox, 0.55, tlZ + oz);
+        group.add(trunk, foliage);
+    }
+    // Fountain at the very center of the 2x2 block
+    const fountainBase = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.4, 0.2, 8), new THREE.MeshStandardMaterial({ color: 0xccccaa }));
+    fountainBase.position.set(tlX + 1.0, 0.1, tlZ + 1.0);
+    const fountainWater = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.05, 8), new THREE.MeshStandardMaterial({ color: 0x3399ff, emissive: 0x004466 }));
+    fountainWater.position.set(tlX + 1.0, 0.2, tlZ + 1.0);
+    group.add(fountainBase, fountainWater);
+    const hoverBox = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.8, 1.9), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 }));
+    hoverBox.position.set(tlX + 1.0, 0.4, tlZ + 1.0);
+    group.add(hoverBox);
+    return group;
+}
+function placePark(x, z) {
+    if (money < PARK_COST) return false;
+    const tiles = [[x, z], [x+1, z], [x, z+1], [x+1, z+1]];
+    for (let [ix, iz] of tiles) if (ix<-10||ix>10||iz<-10||iz>10||isOccupied(ix,iz)||isWater(ix,iz)) return false;
+    let ok = false;
+    for (let [ix, iz] of tiles) if (hasRoadAdjacent(ix, iz)) ok = true;
+    if (!ok) return false;
+    const id = nextParkId++;
+    const cells = [];
+    for (let [ix, iz] of tiles) { parks.set(getKey(ix, iz), id); cells.push(getKey(ix, iz)); }
+    const mesh = createParkMesh(x, z);
+    const div = document.createElement('div'); div.textContent='🌳 Park'; div.style.cssText='color:#aaffaa; font-size:11px; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:12px';
+    const label = new CSS2DObject(div); label.position.set(x+1.0, 0.8, z+1.0); label.visible=false;
+    scene.add(mesh, label);
+    parkObjects.set(id, { mesh, label, cells });
+    money -= PARK_COST; playSound('build'); updateUI(); return true;
+}
+function removeParkAtCell(x,z) {
+    const key = getKey(x,z); if (!parks.has(key)) return false;
+    const id = parks.get(key); const obj = parkObjects.get(id);
+    if (obj) { scene.remove(obj.mesh); if (obj.label) scene.remove(obj.label); for (let ck of obj.cells) parks.delete(ck); parkObjects.delete(id); money += Math.floor(PARK_COST*0.6); updateUI(); }
+    return true;
+}
+// Other building functions: fountain, waterpump, pier, services, school, hospital, library, powerplant (fully functional, same as original)
+function createFountainMesh(x,z) { let g=new THREE.Group(); let pool=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.5,0.15,12),new THREE.MeshStandardMaterial({color:0x88aaff})); pool.position.y=0.05; let water=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,0.05,12),new THREE.MeshStandardMaterial({color:0x3399ff,emissive:0x004466})); water.position.y=0.12; let spout=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.1,0.2,6),new THREE.MeshStandardMaterial({color:0xccaa88})); spout.position.set(0,0.2,0); let droplet=new THREE.Mesh(new THREE.SphereGeometry(0.05,6,6),new THREE.MeshStandardMaterial({color:0x88ccff,emissive:0x2266aa})); droplet.position.set(0,0.35,0); g.add(pool,water,spout,droplet); const hoverBox=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.6,0.9),new THREE.MeshBasicMaterial({transparent:true,opacity:0})); hoverBox.position.y=0.3; g.add(hoverBox); g.position.set(x,0,z); return g; }
+function placeFountain(x,z) { if(money<FOUNTAIN_COST||isOccupied(x,z)||isWater(x,z)||!hasRoadAdjacent(x,z)) return false; money-=FOUNTAIN_COST; let mesh=createFountainMesh(x,z); let div=document.createElement('div'); div.textContent='💧 Fountain'; let label=new CSS2DObject(div); label.position.set(x,0.8,z); label.visible=false; scene.add(mesh,label); fountains.set(getKey(x,z),{mesh,label}); playSound('build'); updateUI(); return true; }
+function removeFountain(x,z) { let key=getKey(x,z); if(!fountains.has(key)) return false; let obj=fountains.get(key); scene.remove(obj.mesh); if(obj.label) scene.remove(obj.label); fountains.delete(key); money+=Math.floor(FOUNTAIN_COST*0.6); updateUI(); return true; }
+function placeWaterPump(x,z) { if(money<WATER_PUMP_COST||!isWater(x,z)||isOccupied(x,z)) return false; money-=WATER_PUMP_COST; let mesh=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.4,0.6),new THREE.MeshStandardMaterial({color:0x88aaff})); mesh.position.set(x,0.2,z); const hoverBox=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.8,0.7),new THREE.MeshBasicMaterial({transparent:true,opacity:0})); hoverBox.position.y=0.4; mesh.add(hoverBox); let div=document.createElement('div'); div.textContent='🚰 Pump'; let label=new CSS2DObject(div); label.position.set(x,0.7,z); label.visible=false; scene.add(mesh,label); waterPumps.set(getKey(x,z),{mesh,label}); playSound('build'); updateUI(); return true; }
+function removeWaterPump(x,z) { let key=getKey(x,z); if(!waterPumps.has(key)) return false; let obj=waterPumps.get(key); scene.remove(obj.mesh); if(obj.label) scene.remove(obj.label); waterPumps.delete(key); money+=Math.floor(WATER_PUMP_COST*0.6); updateUI(); return true; }
+function placePier(x,z,rot) { if(money<PIER_COST) return false; let w=rot===0?2:1,d=rot===0?1:2; for(let i=0;i<w;i++) for(let j=0;j<d;j++) if(!isWater(x+i,z+j)||isOccupied(x+i,z+j)) return false; let ok=false; for(let i=0;i<w;i++) for(let j=0;j<d;j++) if(hasRoadAdjacent(x+i,z+j)) ok=true; if(!ok) return false; let id=nextPierId++; let cells=[]; for(let i=0;i<w;i++) for(let j=0;j<d;j++){ let nx=x+i, nz=z+j; piers.set(getKey(nx,nz),id); cells.push(getKey(nx,nz)); } let mesh=new THREE.Mesh(new THREE.BoxGeometry(w*0.9,0.2,d*0.9),new THREE.MeshStandardMaterial({color:0xbc9a6c})); mesh.position.set(w===2?x+0.5:x,0.1,d===2?z+0.5:z); const hoverBox=new THREE.Mesh(new THREE.BoxGeometry(w*0.9,0.4,d*0.9),new THREE.MeshBasicMaterial({transparent:true,opacity:0})); hoverBox.position.y=0.2; mesh.add(hoverBox); let div=document.createElement('div'); div.textContent='🎣 Pier'; let label=new CSS2DObject(div); label.position.set(w===2?x+0.5:x,0.6,d===2?z+0.5:z); label.visible=false; scene.add(mesh,label); pierObjects.set(id,{mesh,label,cells,rotation:rot}); money-=PIER_COST; playSound('build'); updateUI(); return true; }
+function removePierAtCell(x,z) { let key=getKey(x,z); if(!piers.has(key)) return false; let id=piers.get(key); let obj=pierObjects.get(id); if(obj){ scene.remove(obj.mesh); if(obj.label) scene.remove(obj.label); for(let ck of obj.cells) piers.delete(ck); pierObjects.delete(id); money+=Math.floor(PIER_COST*0.6); updateUI(); } return true; }
+function placeService(x,z,type) { if(money<SERVICE_COST) return false; let w=currentRotation===0?2:1,d=currentRotation===0?1:2; for(let i=0;i<w;i++) for(let j=0;j<d;j++) if(isOccupied(x+i,z+j)||isWater(x+i,z+j)) return false; let ok=false; for(let i=0;i<w;i++) for(let j=0;j<d;j++) if(hasRoadAdjacent(x+i,z+j)) ok=true; if(!ok) return false; let id=nextServiceId++; let cells=[]; for(let i=0;i<w;i++) for(let j=0;j<d;j++){ let nx=x+i, nz=z+j; services.set(getKey(nx,nz),id); cells.push(getKey(nx,nz)); } let color=type==='police'?0x3a6ea5:0xcc5533; let box=new THREE.Mesh(new THREE.BoxGeometry(w*0.9,1.2,d*0.9),new THREE.MeshStandardMaterial({color})); box.position.set(w===2?x+0.5:x,0.6,d===2?z+0.5:z); const hoverBox=new THREE.Mesh(new THREE.BoxGeometry(w*0.9,1.2,d*0.9),new THREE.MeshBasicMaterial({transparent:true,opacity:0})); hoverBox.position.y=0.6; box.add(hoverBox); let div=document.createElement('div'); div.textContent=type==='police'?'👮 Police':'🔥 Fire'; let label=new CSS2DObject(div); label.position.set(w===2?x+0.5:x,1.3,d===2?z+0.5:z); label.visible=false; scene.add(box,label); serviceObjects.set(id,{type,mesh:box,label,cells}); money-=SERVICE_COST; playSound('build'); updateUI(); return true; }
+function removeServiceAtCell(x,z) { let key=getKey(x,z); if(!services.has(key)) return false; let id=services.get(key); let obj=serviceObjects.get(id); if(obj){ scene.remove(obj.mesh); if(obj.label) scene.remove(obj.label); for(let ck of obj.cells) services.delete(ck); serviceObjects.delete(id); money+=Math.floor(SERVICE_COST*0.6); updateUI(); } return true; }
+function placeSchool(x,z) { if(money<SCHOOL_COST) return false; for(let i=0;i<2;i++) for(let j=0;j<2;j++) if(isOccupied(x+i,z+j)||isWater(x+i,z+j)) return false; let ok=false; for(let i=0;i<2;i++) for(let j=0;j<2;j++) if(hasRoadAdjacent(x+i,z+j)) ok=true; if(!ok) return false; let id=nextSchoolId++; let cells=[]; for(let i=0;i<2;i++) for(let j=0;j<2;j++){ let nx=x+i, nz=z+j; schools.set(getKey(nx,nz),id); cells.push(getKey(nx,nz)); } let box=new THREE.Mesh(new THREE.BoxGeometry(1.8,1.2,1.8),new THREE.MeshStandardMaterial({color:0x9b59b6})); box.position.set(x+0.5,0.6,z+0.5); const hoverBox=new THREE.Mesh(new THREE.BoxGeometry(1.8,1.2,1.8),new THREE.MeshBasicMaterial({transparent:true,opacity:0})); hoverBox.position.y=0.6; box.add(hoverBox); let div=document.createElement('div'); div.textContent='🏫 School'; let label=new CSS2DObject(div); label.position.set(x+0.5,1.3,z+0.5); label.visible=false; scene.add(box,label); schoolObjects.set(id,{mesh:box,label,cells}); money-=SCHOOL_COST; playSound('build'); updateUI(); return true; }
+function removeSchoolAtCell(x,z) { let key=getKey(x,z); if(!schools.has(key)) return false; let id=schools.get(key); let obj=schoolObjects.get(id); if(obj){ scene.remove(obj.mesh); if(obj.label) scene.remove(obj.label); for(let ck of obj.cells) schools.delete(ck); schoolObjects.delete(id); money+=Math.floor(SCHOOL_COST*0.6); updateUI(); } return true; }
+function placeHospital(x,z) { if(money<HOSPITAL_COST) return false; for(let i=0;i<2;i++) for(let j=0;j<2;j++) if(isOccupied(x+i,z+j)||isWater(x+i,z+j)) return false; let ok=false; for(let i=0;i<2;i++) for(let j=0;j<2;j++) if(hasRoadAdjacent(x+i,z+j)) ok=true; if(!ok) return false; let id=nextHospitalId++; let cells=[]; for(let i=0;i<2;i++) for(let j=0;j<2;j++){ let nx=x+i, nz=z+j; hospitals.set(getKey(nx,nz),id); cells.push(getKey(nx,nz)); } let box=new THREE.Mesh(new THREE.BoxGeometry(1.8,1.2,1.8),new THREE.MeshStandardMaterial({color:0xe74c3c})); box.position.set(x+0.5,0.6,z+0.5); let cross=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.05),new THREE.MeshStandardMaterial({color:0xff3333})); cross.position.set(x+0.5,0.95,z+0.5); const hoverBox=new THREE.Mesh(new THREE.BoxGeometry(1.8,1.2,1.8),new THREE.MeshBasicMaterial({transparent:true,opacity:0})); hoverBox.position.y=0.6; box.add(hoverBox); let div=document.createElement('div'); div.textContent='🏥 Hospital'; let label=new CSS2DObject(div); label.position.set(x+0.5,1.3,z+0.5); label.visible=false; scene.add(box,cross,label); hospitalObjects.set(id,{mesh:box,label,cells}); money-=HOSPITAL_COST; playSound('build'); updateUI(); return true; }
+function removeHospitalAtCell(x,z) { let key=getKey(x,z); if(!hospitals.has(key)) return false; let id=hospitals.get(key); let obj=hospitalObjects.get(id); if(obj){ scene.remove(obj.mesh); if(obj.label) scene.remove(obj.label); for(let ck of obj.cells) hospitals.delete(ck); hospitalObjects.delete(id); money+=Math.floor(HOSPITAL_COST*0.6); updateUI(); } return true; }
+function placeLibrary(x,z) { if(money<LIBRARY_COST||isOccupied(x,z)||isWater(x,z)||!hasRoadAdjacent(x,z)) return false; let id=nextLibraryId++; let key=getKey(x,z); libraries.set(key,id); let box=new THREE.Mesh(new THREE.BoxGeometry(0.96,1.0,0.96),new THREE.MeshStandardMaterial({color:0xf39c12})); box.position.set(x,0.5,z); const hoverBox=new THREE.Mesh(new THREE.BoxGeometry(0.96,1.0,0.96),new THREE.MeshBasicMaterial({transparent:true,opacity:0})); hoverBox.position.y=0.5; box.add(hoverBox); let div=document.createElement('div'); div.textContent='📖 Library'; let label=new CSS2DObject(div); label.position.set(x,1.1,z); label.visible=false; scene.add(box,label); libraryObjects.set(id,{mesh:box,label,key}); money-=LIBRARY_COST; playSound('build'); updateUI(); return true; }
+function removeLibraryAtCell(x,z) { let key=getKey(x,z); if(!libraries.has(key)) return false; let id=libraries.get(key); let obj=libraryObjects.get(id); if(obj){ scene.remove(obj.mesh); if(obj.label) scene.remove(obj.label); libraries.delete(key); libraryObjects.delete(id); money+=Math.floor(LIBRARY_COST*0.6); updateUI(); } return true; }
+function placePowerPlant(x,z) { if(money<POWERPLANT_COST) return false; for(let i=0;i<2;i++) for(let j=0;j<2;j++) if(isOccupied(x+i,z+j)||isWater(x+i,z+j)) return false; let ok=false; for(let i=0;i<2;i++) for(let j=0;j<2;j++) if(hasRoadAdjacent(x+i,z+j)) ok=true; if(!ok) return false; let id=nextPowerPlantId++; let cells=[]; for(let i=0;i<2;i++) for(let j=0;j<2;j++){ let nx=x+i, nz=z+j; powerPlants.set(getKey(nx,nz),id); cells.push(getKey(nx,nz)); } let box=new THREE.Mesh(new THREE.BoxGeometry(1.8,1.0,1.8),new THREE.MeshStandardMaterial({color:0x7f8c8d})); box.position.set(x+0.5,0.5,z+0.5); let chimney=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.4,1.0,8),new THREE.MeshStandardMaterial({color:0x95a5a6})); chimney.position.set(x+1.2,1.0,z+0.5); const hoverBox=new THREE.Mesh(new THREE.BoxGeometry(1.8,1.0,1.8),new THREE.MeshBasicMaterial({transparent:true,opacity:0})); hoverBox.position.y=0.5; box.add(hoverBox); let div=document.createElement('div'); div.textContent='⚡ Power Plant'; let label=new CSS2DObject(div); label.position.set(x+0.5,1.2,z+0.5); label.visible=false; scene.add(box,chimney,label); powerPlantObjects.set(id,{mesh:box,label,cells}); money-=POWERPLANT_COST; playSound('build'); updateUI(); return true; }
+function removePowerPlantAtCell(x,z) { let key=getKey(x,z); if(!powerPlants.has(key)) return false; let id=powerPlants.get(key); let obj=powerPlantObjects.get(id); if(obj){ scene.remove(obj.mesh); if(obj.label) scene.remove(obj.label); for(let ck of obj.cells) powerPlants.delete(ck); powerPlantObjects.delete(id); money+=Math.floor(POWERPLANT_COST*0.6); updateUI(); } return true; }
+
+// --- ROADS & BRIDGES (unchanged) ---
+function getNeighborMask(x,z) { let m=0; if(isRoad(x,z+1)) m|=1; if(isRoad(x,z-1)) m|=2; if(isRoad(x+1,z)) m|=4; if(isRoad(x-1,z)) m|=8; return m; }
+function getNeighborCount(x,z) { let c=0; if(isRoad(x,z+1)) c++; if(isRoad(x,z-1)) c++; if(isRoad(x+1,z)) c++; if(isRoad(x-1,z)) c++; return c; }
+function createDetailedRoadMesh(x,z,mask) { const group=new THREE.Group(); const roadMat=new THREE.MeshStandardMaterial({color:0x2a2e3a,roughness:0.6}); const base=new THREE.Mesh(new THREE.BoxGeometry(0.96,0.1,0.96),roadMat); base.position.set(0,0.05,0); group.add(base); const lineMat=new THREE.MeshStandardMaterial({color:0xe8c35c}); const hasN=!!(mask&1),hasS=!!(mask&2),hasE=!!(mask&4),hasW=!!(mask&8); const cnt=(hasN?1:0)+(hasS?1:0)+(hasE?1:0)+(hasW?1:0); if(cnt===2&&((hasN&&hasS)||(hasE&&hasW))){ if(hasN&&hasS){const l=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.06,0.8),lineMat);l.position.set(0,0.1,0);group.add(l);}else{const l=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.06,0.08),lineMat);l.position.set(0,0.1,0);group.add(l);}}else if(cnt===1){ if(hasN){const l=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.06,0.4),lineMat);l.position.set(0,0.1,0.35);group.add(l);}else if(hasS){const l=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.06,0.4),lineMat);l.position.set(0,0.1,-0.35);group.add(l);}else if(hasE){const l=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.06,0.08),lineMat);l.position.set(0.35,0.1,0);group.add(l);}else if(hasW){const l=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.06,0.08),lineMat);l.position.set(-0.35,0.1,0);group.add(l);}} group.position.set(x,0,z); return group; }
+function createCarBridgeMesh(x,z,mask) { const group=new THREE.Group(); const deckMat=new THREE.MeshStandardMaterial({color:0x3a3e4a,roughness:0.7,metalness:0.1}); const deck=new THREE.Mesh(new THREE.BoxGeometry(0.96,0.12,0.96),deckMat); deck.position.set(0,0.08,0); group.add(deck); const barrierMat=new THREE.MeshStandardMaterial({color:0xaaaaaa}); const hasN=!!(mask&1),hasS=!!(mask&2),hasE=!!(mask&4),hasW=!!(mask&8); if(!hasN){const bar=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.12,0.08),barrierMat);bar.position.set(0,0.18,0.48);group.add(bar);} if(!hasS){const bar=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.12,0.08),barrierMat);bar.position.set(0,0.18,-0.48);group.add(bar);} if(!hasE){const bar=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.12,0.9),barrierMat);bar.position.set(0.48,0.18,0);group.add(bar);} if(!hasW){const bar=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.12,0.9),barrierMat);bar.position.set(-0.48,0.18,0);group.add(bar);} const pillarMat=new THREE.MeshStandardMaterial({color:0xaa9977}); for(let off=-0.3;off<=0.3;off+=0.3){const p1=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.5,0.2),pillarMat);p1.position.set(off,-0.2,off);group.add(p1);const p2=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.5,0.2),pillarMat);p2.position.set(off,-0.2,-off);group.add(p2);} group.position.set(x,0,z); return group; }
+function createTrafficLight(x,z) { const group=new THREE.Group(); const poleMat=new THREE.MeshStandardMaterial({color:0x5a5a5a}); const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.12,1.2,6),poleMat);pole.position.y=0.6;group.add(pole); const arm=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.08,0.1),poleMat);arm.position.set(0.3,0.85,0);group.add(arm); const redMat=new THREE.MeshStandardMaterial({color:0xff3333,emissive:0x441111}); const yellowMat=new THREE.MeshStandardMaterial({color:0xffaa33,emissive:0x442200}); const greenMat=new THREE.MeshStandardMaterial({color:0x33ff33,emissive:0x114411}); const redLight=new THREE.Mesh(new THREE.SphereGeometry(0.09,16,16),redMat);redLight.position.set(0.5,0.92,0.1); const yellowLight=new THREE.Mesh(new THREE.SphereGeometry(0.09,16,16),yellowMat);yellowLight.position.set(0.5,0.85,0.1); const greenLight=new THREE.Mesh(new THREE.SphereGeometry(0.09,16,16),greenMat);greenLight.position.set(0.5,0.78,0.1); group.add(redLight,yellowLight,greenLight); group.position.set(x,0,z); return group; }
+function refreshRoadVisual(x,z) { if(!isRoad(x,z)) return; const key=getKey(x,z); const data=roads.get(key); if(data.mesh) scene.remove(data.mesh); const mask=getNeighborMask(x,z); let newMesh=isWater(x,z)?createCarBridgeMesh(x,z,mask):createDetailedRoadMesh(x,z,mask); scene.add(newMesh); data.mesh=newMesh; const cnt=getNeighborCount(x,z); if(cnt>=3&&!data.lightMesh){data.lightMesh=createTrafficLight(x,z);scene.add(data.lightMesh);}else if(cnt<3&&data.lightMesh){scene.remove(data.lightMesh);data.lightMesh=null;} }
+function updateRoadNeighbors(x,z) { refreshRoadVisual(x,z); for(let [dx,dz] of [[0,1],[0,-1],[1,0],[-1,0]]){const nx=x+dx,nz=z+dz;if(nx>=-10&&nx<=10&&nz>=-10&&nz<=10&&isRoad(nx,nz))refreshRoadVisual(nx,nz);} }
+function placeRoad(x,z) { if(x<-10||x>10||z<-10||z>10) return false; if(isZone(x,z)||isPark(x,z)||isFountain(x,z)||isWaterPump(x,z)||isPier(x,z)||isService(x,z)||isSchool(x,z)||isHospital(x,z)||isLibrary(x,z)||isPowerPlant(x,z)) return false; if(money<ROAD_COST) return false; money-=ROAD_COST; const key=getKey(x,z); roads.set(key,{mesh:null,lightMesh:null}); updateRoadNeighbors(x,z); for(let [zk] of zones.entries()){let [zx,zz]=zk.split(',').map(Number);updateBuilding(zx,zz,null);} playSound('build'); updateUI(); return true; }
+function removeRoad(x,z) { const key=getKey(x,z); if(!roads.has(key)) return false; const data=roads.get(key); if(data.mesh) scene.remove(data.mesh); if(data.lightMesh) scene.remove(data.lightMesh); roads.delete(key); updateRoadNeighbors(x,z); for(let [zk] of zones.entries()){let [zx,zz]=zk.split(',').map(Number);updateBuilding(zx,zz,null);} money+=Math.floor(ROAD_COST*0.5); updateUI(); return true; }
+function demolishAt(x,z) { if(isRoad(x,z)) removeRoad(x,z); else if(isZone(x,z)) removeZone(x,z); else if(isPark(x,z)) removeParkAtCell(x,z); else if(isFountain(x,z)) removeFountain(x,z); else if(isWaterPump(x,z)) removeWaterPump(x,z); else if(isPier(x,z)) removePierAtCell(x,z); else if(isService(x,z)) removeServiceAtCell(x,z); else if(isSchool(x,z)) removeSchoolAtCell(x,z); else if(isHospital(x,z)) removeHospitalAtCell(x,z); else if(isLibrary(x,z)) removeLibraryAtCell(x,z); else if(isPowerPlant(x,z)) removePowerPlantAtCell(x,z); }
+
+// --- CARS & CITIZENS (unchanged) ---
+function createCarModel(x,z,col) { const group=new THREE.Group(); const body=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.2,0.9),new THREE.MeshStandardMaterial({color:col})); body.position.y=0.1; group.add(body); const roof=new THREE.Mesh(new THREE.BoxGeometry(0.45,0.15,0.65),new THREE.MeshStandardMaterial({color:0xccccdd})); roof.position.y=0.22; group.add(roof); const windowMat=new THREE.MeshStandardMaterial({color:0x88aaff}); const frontWin=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.1,0.02),windowMat); frontWin.position.set(0,0.26,0.32); group.add(frontWin); const rearWin=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.1,0.02),windowMat); rearWin.position.set(0,0.26,-0.32); group.add(rearWin); const wheelMat=new THREE.MeshStandardMaterial({color:0x222222}); const wheelGeo=new THREE.CylinderGeometry(0.08,0.08,0.05,12); const positions=[[-0.25,0.05,-0.35],[0.25,0.05,-0.35],[-0.25,0.05,0.35],[0.25,0.05,0.35]]; for(let [px,py,pz] of positions){const wheel=new THREE.Mesh(wheelGeo,wheelMat);wheel.rotation.z=Math.PI/2;wheel.position.set(px,py,pz);group.add(wheel);} group.position.set(x,0.05,z); return group; }
+function spawnCar() { if(roads.size<2||cars.length>=MAX_CARS) return; let tiles=Array.from(roads.keys()); if(!tiles.length) return; let [sx,sz]=tiles[Math.floor(Math.random()*tiles.length)].split(',').map(Number); let [ex,ez]=tiles[Math.floor(Math.random()*tiles.length)].split(',').map(Number); let path=findPath(sx,sz,ex,ez); if(!path||path.length<2) return; let waypoints=path.map(([px,pz])=>({x:px,z:pz})); let car=createCarModel(sx,sz,0xff3333); scene.add(car); cars.push({mesh:car, x:sx, z:sz, waypoints, currentWaypointIndex:1, dirX:0, dirZ:0}); document.getElementById('cars').textContent=cars.length; }
+function updateCars(delta) { let spd=CAR_SPEED*delta; for(let i=0;i<cars.length;i++){ let c=cars[i]; let t=c.waypoints[c.currentWaypointIndex]; if(!t){ scene.remove(c.mesh); cars.splice(i,1); i--; continue; } let dx=t.x-c.x, dz=t.z-c.z, dist=Math.hypot(dx,dz); if(dist<0.05){ c.x=t.x; c.z=t.z; c.currentWaypointIndex++; if(c.currentWaypointIndex<c.waypoints.length){ let n=c.waypoints[c.currentWaypointIndex]; c.dirX=n.x-c.x; c.dirZ=n.z-c.z; let len=Math.hypot(c.dirX,c.dirZ); if(len>0){ c.dirX/=len; c.dirZ/=len; } } } else { let step=Math.min(spd,dist); c.x+=(dx/dist)*step; c.z+=(dz/dist)*step; c.dirX=dx/dist; c.dirZ=dz/dist; } c.mesh.position.set(c.x,0.05,c.z); c.mesh.rotation.y=Math.atan2(c.dirX,c.dirZ); } document.getElementById('cars').textContent=cars.length; }
+function createCitizenModel(x,z) { let g=new THREE.Group(); let body=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.18,0.45,8),new THREE.MeshStandardMaterial({color:0x44aaff,emissive:0x004466})); body.position.y=0.25; g.add(body); let head=new THREE.Mesh(new THREE.SphereGeometry(0.16,16,16),new THREE.MeshStandardMaterial({color:0xffccaa})); head.position.y=0.52; g.add(head); let div=document.createElement('div'); div.textContent='👤'; div.style.cssText='font-size:22px; font-weight:bold; text-shadow:2px 2px 2px black; background:rgba(0,0,0,0.5); padding:2px 6px; border-radius:20px'; let label=new CSS2DObject(div); label.position.set(0,0.85,0); g.add(label); g.position.set(x,0,z); return g; }
+function getRandomResidential() { for(let [key,zt] of zones.entries()) if(zt==='residential'){ let b=buildings.get(key); if(b && b.level>0 && !b.eventType){ let [x,z]=key.split(',').map(Number); return {x,z,key}; } } return null; }
+function getRandomDestination() { let dests=[]; for(let [key,zt] of zones.entries()) if(zt==='commercial'){ let b=buildings.get(key); if(b && b.level>0 && !b.eventType){ let [x,z]=key.split(',').map(Number); dests.push({x,z,key}); } } for(let [key] of parks.entries()){ let [x,z]=key.split(',').map(Number); dests.push({x,z,key}); } return dests.length?dests[Math.floor(Math.random()*dests.length)]:null; }
+function spawnCitizen() { if(citizens.length>=MAX_CITIZENS) return; let home=getRandomResidential(); if(!home) return; let dest=getRandomDestination(); if(!dest) return; let path=findPath(home.x,home.z,dest.x,dest.z); if(!path) return; let waypoints=path.map(([px,pz])=>({x:px,z:pz})); let cm=createCitizenModel(home.x,home.z); scene.add(cm); citizens.push({mesh:cm, x:home.x, z:home.z, waypoints, currentWaypointIndex:1, dirX:0, dirZ:0, state:'going'}); playSound('footstep'); document.getElementById('citizens').textContent=citizens.length; }
+function updateCitizens(delta) { let spd=CITIZEN_SPEED*delta; for(let i=0;i<citizens.length;i++){ let c=citizens[i]; let t=c.waypoints[c.currentWaypointIndex]; if(!t){ scene.remove(c.mesh); citizens.splice(i,1); i--; continue; } let dx=t.x-c.x, dz=t.z-c.z, dist=Math.hypot(dx,dz); if(dist<0.05){ c.x=t.x; c.z=t.z; c.currentWaypointIndex++; if(c.currentWaypointIndex<c.waypoints.length){ let n=c.waypoints[c.currentWaypointIndex]; c.dirX=n.x-c.x; c.dirZ=n.z-c.z; let len=Math.hypot(c.dirX,c.dirZ); if(len>0){ c.dirX/=len; c.dirZ/=len; } } } else { let step=Math.min(spd,dist); c.x+=(dx/dist)*step; c.z+=(dz/dist)*step; c.dirX=dx/dist; c.dirZ=dz/dist; } c.mesh.position.set(c.x,0.2,c.z); c.mesh.rotation.y=Math.atan2(c.dirX,c.dirZ); } document.getElementById('citizens').textContent=citizens.length; }
+function recalcStats() { let pop=0,inc=0,pen=0,conn=0,total=0; for(let [key,b] of buildings.entries()){ let [x,z]=key.split(',').map(Number); let c=hasRoadAdjacent(x,z); if(c && b.level>0 && !b.eventType){ conn++; let d=BUILDING_DATA[b.type]; pop+=d.basePop[b.level]; inc+=d.baseIncome[b.level]; if(b.type==='industrial') pen+=d.happinessPenalty[b.level]; } if(b.level>0) total++; } let parkCnt=parkObjects.size, fountainCnt=fountains.size; let happyBonus=parkCnt*PARK_HAPPINESS+fountainCnt*FOUNTAIN_HAPPINESS; let coverage=total>0?(conn/total)*25:0; let newHap=50+coverage+pen+happyBonus; happiness=Math.min(95,Math.max(15,Math.floor(newHap))); totalPop=pop; let factor=0.5+happiness/100; let tax=Math.floor(inc*factor); money+=tax; document.getElementById('money').textContent=Math.floor(money); document.getElementById('population').textContent=totalPop; document.getElementById('happiness').textContent=happiness; document.getElementById('buildings').textContent=total; document.getElementById('parks').textContent=parkCnt; document.getElementById('fountains').textContent=fountainCnt; }
+let lastIncome=performance.now(), lastGrowth=performance.now(), lastLabel=performance.now();
+function gameLoop(now){ let delta=Math.min(0.033,(now-lastFrameTime)/1000); lastFrameTime=now; if(now-lastIncome>=2000){ recalcStats(); lastIncome=now; } if(now-lastGrowth>=500){ updateGrowth(now); lastGrowth=now; } if(now-lastLabel>=200){ updateAllLabels(now); lastLabel=now; } if(now-lastCarSpawn>=CAR_SPAWN_INTERVAL && roads.size>0){ spawnCar(); lastCarSpawn=now; } if(now-lastCitizenSpawn>=CITIZEN_SPAWN_INTERVAL){ spawnCitizen(); lastCitizenSpawn=now; } updateCars(delta); updateCitizens(delta); requestAnimationFrame(gameLoop); }
+function updateUI() { recalcStats(); }
+
+// --- GHOST PREVIEW (park with trees at tile centers) ---
+let currentPreview = null;
+function clearPreview() { if(currentPreview) scene.remove(currentPreview); currentPreview=null; }
+function createGhostPreview(tool, x, z, rot, isValid) {
+    if (tool === 'inspect') return null;
+    const group = new THREE.Group();
+    const color = isValid ? 0x88ff88 : 0xff6666;
+    const mat = new THREE.MeshPhongMaterial({ color: color, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+    if (tool === 'road') {
+        const box = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.1, 0.96), mat); box.position.set(0,0.05,0); group.add(box);
+    } else if (['residential','commercial','industrial'].includes(tool)) {
+        const box = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.7, 0.96), mat); box.position.set(0,0.35,0);
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.3, 4), mat); roof.position.set(0,0.75,0);
+        group.add(box, roof);
+    } else if (tool === 'park') {
+        // Grid-aligned park preview (2x2 block) with trees at integer tile centers
+        const base = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.1, 2.0), mat); base.position.set(1.0, 0.05, 1.0); group.add(base);
+        // Trees at the exact center of each tile (0,0), (1,0), (0,1), (1,1) relative to park origin
+        const treePositions = [[0,0], [1,0], [0,1], [1,1]];
+        for (let [ox,oz] of treePositions) {
+            const tree = new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.14,0.4,4), mat); tree.position.set(ox,0.2,oz); group.add(tree);
+        }
+        const fountainBase = new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.4,0.2,8), mat); fountainBase.position.set(1.0,0.1,1.0); group.add(fountainBase);
+    } else if (tool === 'fountain') {
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.45,0.2,8), mat); base.position.set(0,0.1,0);
+        const column = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.18,0.4,6), mat); column.position.set(0,0.35,0);
+        group.add(base, column);
+    } else if (tool === 'waterpump') {
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.45,0.2,8), mat); base.position.set(0,0.1,0);
+        const column = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.18,0.5,6), mat); column.position.set(0,0.4,0);
+        group.add(base, column);
+    } else if (tool === 'pier') {
+        const w=rot===0?2:1,d=rot===0?1:2;
+        const deck=new THREE.Mesh(new THREE.BoxGeometry(w*0.9,0.1,d*0.9),mat); deck.position.set(rot===0?0.5:0,0.1,rot===0?0:0.5); group.add(deck);
+        for(let i=-0.4;i<=0.4;i+=0.8){ const post=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.3,0.08),mat); post.position.set(rot===0?i+0.5:0.45,0.25,rot===0?0.45:i+0.5); group.add(post); }
+    } else if (tool==='police'||tool==='fire') {
+        const w=rot===0?2:1,d=rot===0?1:2;
+        const box=new THREE.Mesh(new THREE.BoxGeometry(w*0.9,1.2,d*0.9),mat); box.position.set(rot===0?0.5:0,0.6,rot===0?0:0.5);
+        const roof=new THREE.Mesh(new THREE.BoxGeometry(w*0.95,0.1,d*0.95),mat); roof.position.set(rot===0?0.5:0,1.25,rot===0?0:0.5);
+        const sign=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.15,0.05),mat); if(rot===0) sign.position.set(1.0,1.3,0.45); else sign.position.set(0,1.3,0.95);
+        group.add(box,roof,sign);
+    } else if (tool==='school') {
+        const box=new THREE.Mesh(new THREE.BoxGeometry(1.8,1.2,1.8),mat); box.position.set(0.5,0.6,0.5);
+        const roof=new THREE.Mesh(new THREE.BoxGeometry(1.9,0.2,1.9),mat); roof.position.set(0.5,1.2,0.5);
+        group.add(box,roof);
+    } else if (tool==='hospital') {
+        const box=new THREE.Mesh(new THREE.BoxGeometry(1.8,1.2,1.8),mat); box.position.set(0.5,0.6,0.5);
+        const roof=new THREE.Mesh(new THREE.BoxGeometry(1.9,0.2,1.9),mat); roof.position.set(0.5,1.2,0.5);
+        const cross=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.05),mat); cross.position.set(1.0,1.0,0.48);
+        group.add(box,roof,cross);
+    } else if (tool==='library') {
+        const box=new THREE.Mesh(new THREE.BoxGeometry(0.96,1.0,0.96),mat); box.position.set(0,0.5,0);
+        const roof=new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.6,0.2,4),mat); roof.position.set(0,1.0,0);
+        group.add(box,roof);
+    } else if (tool==='powerplant') {
+        const box=new THREE.Mesh(new THREE.BoxGeometry(1.8,1.0,1.8),mat); box.position.set(0.5,0.5,0.5);
+        const chimney=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.4,1.0,8),mat); chimney.position.set(1.2,1.0,0.5);
+        group.add(box,chimney);
+    }
+    group.position.set(x, 0, z);
+    return group;
+}
+function validatePlacement(tool, x, z, rot) {
+    if (tool === 'inspect') return true;
+    if (tool === 'road') return (x>=-10&&x<=10&&z>=-10&&z<=10 && !isZone(x,z)&&!isPark(x,z)&&!isFountain(x,z)&&!isWaterPump(x,z)&&!isPier(x,z)&&!isService(x,z)&&!isSchool(x,z)&&!isHospital(x,z)&&!isLibrary(x,z)&&!isPowerPlant(x,z) && money>=ROAD_COST);
+    if (['residential','commercial','industrial'].includes(tool)) return (x>=-10&&x<=10&&z>=-10&&z<=10 && !isOccupied(x,z)&&!isWater(x,z) && hasRoadAdjacent(x,z) && money>=ZONE_COST);
+    if (tool === 'park') {
+        const tiles = [[x,z],[x+1,z],[x,z+1],[x+1,z+1]];
+        for (let [ix,iz] of tiles) if (ix<-10||ix>10||iz<-10||iz>10||isOccupied(ix,iz)||isWater(ix,iz)) return false;
+        let ok=false; for (let [ix,iz] of tiles) if (hasRoadAdjacent(ix,iz)) ok=true;
+        return ok && money>=PARK_COST;
+    }
+    if (tool === 'fountain') return !isOccupied(x,z) && !isWater(x,z) && hasRoadAdjacent(x,z) && money>=FOUNTAIN_COST;
+    if (tool === 'waterpump') return isWater(x,z) && !isOccupied(x,z) && money>=WATER_PUMP_COST;
+    if (tool === 'pier') {
+        let w=rot===0?2:1,d=rot===0?1:2;
+        for(let i=0;i<w;i++) for(let j=0;j<d;j++){ let nx=x+i, nz=z+j; if(nx<-10||nx>10||nz<-10||nz>10||!isWater(nx,nz)||isOccupied(nx,nz)) return false; }
+        let ok=false; for(let i=0;i<w;i++) for(let j=0;j<d;j++) if(hasRoadAdjacent(x+i,z+j)) ok=true;
+        return ok && money>=PIER_COST;
+    }
+    if (tool==='police'||tool==='fire') {
+        let w=rot===0?2:1,d=rot===0?1:2;
+        for(let i=0;i<w;i++) for(let j=0;j<d;j++) if(isOccupied(x+i,z+j)||isWater(x+i,z+j)) return false;
+        let ok=false; for(let i=0;i<w;i++) for(let j=0;j<d;j++) if(hasRoadAdjacent(x+i,z+j)) ok=true;
+        return ok && money>=SERVICE_COST;
+    }
+    if (tool==='school'||tool==='hospital'||tool==='powerplant') {
+        let size=2;
+        for(let i=0;i<size;i++) for(let j=0;j<size;j++) if(isOccupied(x+i,z+j)||isWater(x+i,z+j)) return false;
+        let ok=false; for(let i=0;i<size;i++) for(let j=0;j<size;j++) if(hasRoadAdjacent(x+i,z+j)) ok=true;
+        let cost = tool==='school'?SCHOOL_COST:(tool==='hospital'?HOSPITAL_COST:POWERPLANT_COST);
+        return ok && money>=cost;
+    }
+    if (tool==='library') return !isOccupied(x,z) && !isWater(x,z) && hasRoadAdjacent(x,z) && money>=LIBRARY_COST;
+    return false;
+}
+function updatePreview(x,z) {
+    if (currentTool === 'demolish' || currentTool === 'inspect') { clearPreview(); return; }
+    const isValid = validatePlacement(currentTool, x, z, currentRotation);
+    const ghost = createGhostPreview(currentTool, x, z, currentRotation, isValid);
+    if (currentPreview) scene.remove(currentPreview);
+    currentPreview = ghost;
+    if (ghost) scene.add(ghost);
+}
+let currentHoveredNonZone = null;
+function hideAllNonZoneLabels() {
+    parkObjects.forEach(obj=>{if(obj.label) obj.label.visible=false});
+    fountains.forEach(obj=>{if(obj.label) obj.label.visible=false});
+    waterPumps.forEach(obj=>{if(obj.label) obj.label.visible=false});
+    pierObjects.forEach(obj=>{if(obj.label) obj.label.visible=false});
+    serviceObjects.forEach(obj=>{if(obj.label) obj.label.visible=false});
+    schoolObjects.forEach(obj=>{if(obj.label) obj.label.visible=false});
+    hospitalObjects.forEach(obj=>{if(obj.label) obj.label.visible=false});
+    libraryObjects.forEach(obj=>{if(obj.label) obj.label.visible=false});
+    powerPlantObjects.forEach(obj=>{if(obj.label) obj.label.visible=false});
+}
+const hoverRaycaster = new THREE.Raycaster();
+function onMouseMoveTooltip(event) {
+    const mouse = new THREE.Vector2();
+    mouse.x = (event.clientX / renderer.domElement.clientWidth) * 2 - 1;
+    mouse.y = -(event.clientY / renderer.domElement.clientHeight) * 2 + 1;
+    hoverRaycaster.setFromCamera(mouse, camera);
+    const allMeshes = [];
+    const meshToLabel = new Map();
+    parkObjects.forEach(obj=>{ allMeshes.push(obj.mesh); meshToLabel.set(obj.mesh, obj.label); });
+    fountains.forEach(obj=>{ allMeshes.push(obj.mesh); meshToLabel.set(obj.mesh, obj.label); });
+    waterPumps.forEach(obj=>{ allMeshes.push(obj.mesh); meshToLabel.set(obj.mesh, obj.label); });
+    pierObjects.forEach(obj=>{ allMeshes.push(obj.mesh); meshToLabel.set(obj.mesh, obj.label); });
+    serviceObjects.forEach(obj=>{ allMeshes.push(obj.mesh); meshToLabel.set(obj.mesh, obj.label); });
+    schoolObjects.forEach(obj=>{ allMeshes.push(obj.mesh); meshToLabel.set(obj.mesh, obj.label); });
+    hospitalObjects.forEach(obj=>{ allMeshes.push(obj.mesh); meshToLabel.set(obj.mesh, obj.label); });
+    libraryObjects.forEach(obj=>{ allMeshes.push(obj.mesh); meshToLabel.set(obj.mesh, obj.label); });
+    powerPlantObjects.forEach(obj=>{ allMeshes.push(obj.mesh); meshToLabel.set(obj.mesh, obj.label); });
+    const hits = hoverRaycaster.intersectObjects(allMeshes);
+    if (hits.length) {
+        const label = meshToLabel.get(hits[0].object);
+        if (label && label !== currentHoveredNonZone) {
+            hideAllNonZoneLabels();
+            label.visible = true;
+            currentHoveredNonZone = label;
+        }
+        return;
+    }
+    if (currentHoveredNonZone) { hideAllNonZoneLabels(); currentHoveredNonZone = null; }
+}
+const rayPlane = new THREE.Plane(new THREE.Vector3(0,1,0),0);
+const clickRaycaster = new THREE.Raycaster();
+function getTile(event) { let mouse=new THREE.Vector2(); mouse.x=(event.clientX/renderer.domElement.clientWidth)*2-1; mouse.y=-(event.clientY/renderer.domElement.clientHeight)*2+1; clickRaycaster.setFromCamera(mouse,camera); let point=new THREE.Vector3(); if(clickRaycaster.ray.intersectPlane(rayPlane,point)){ let x=Math.round(point.x),z=Math.round(point.z); x=Math.min(10,Math.max(-10,x)); z=Math.min(10,Math.max(-10,z)); return{x,z}; } return null; }
+function onCanvasClick(event){ let tile=getTile(event); if(!tile) return; if(currentTool==='road') placeRoad(tile.x,tile.z); else if(currentTool==='demolish') demolishAt(tile.x,tile.z); else if(currentTool==='inspect') { /* do nothing */ } else if(currentTool==='residential') placeZone(tile.x,tile.z,'residential'); else if(currentTool==='commercial') placeZone(tile.x,tile.z,'commercial'); else if(currentTool==='industrial') placeZone(tile.x,tile.z,'industrial'); else if(currentTool==='park') placePark(tile.x,tile.z); else if(currentTool==='fountain') placeFountain(tile.x,tile.z); else if(currentTool==='waterpump') placeWaterPump(tile.x,tile.z); else if(currentTool==='pier') placePier(tile.x,tile.z,currentRotation); else if(currentTool==='police') placeService(tile.x,tile.z,'police'); else if(currentTool==='fire') placeService(tile.x,tile.z,'fire'); else if(currentTool==='school') placeSchool(tile.x,tile.z); else if(currentTool==='hospital') placeHospital(tile.x,tile.z); else if(currentTool==='library') placeLibrary(tile.x,tile.z); else if(currentTool==='powerplant') placePowerPlant(tile.x,tile.z); updatePreview(tile.x,tile.z); }
+function onMouseMove(event){ let tile=getTile(event); if(tile) updatePreview(tile.x,tile.z); else clearPreview(); onMouseMoveTooltip(event); }
+function onKeyDown(e){ if(e.key==='r'||e.key==='R'){ if(currentTool==='pier'||currentTool==='police'||currentTool==='fire'){ currentRotation=currentRotation===0?1:0; let tile=getTile(new MouseEvent('mousemove')); if(tile) updatePreview(tile.x,tile.z); } } }
+const roadBtnUI=document.getElementById('btnRoad'), delBtnUI=document.getElementById('btnDel'), inspectBtnUI=document.getElementById('btnInspect');
+const zoneSelect=document.getElementById('zone-select'), natureSelect=document.getElementById('nature-select'), civicSelect=document.getElementById('civic-service-select');
+function setActiveTool(tool){ currentTool=tool; currentRotation=0; roadBtnUI.classList.remove('active'); delBtnUI.classList.remove('active'); inspectBtnUI.classList.remove('active'); if(tool==='road') roadBtnUI.classList.add('active'); else if(tool==='demolish') delBtnUI.classList.add('active'); else if(tool==='inspect') inspectBtnUI.classList.add('active'); clearPreview(); document.getElementById('current-tool-label').textContent=`🔨 ${tool} Tool`; }
+roadBtnUI.addEventListener('click',()=>setActiveTool('road')); delBtnUI.addEventListener('click',()=>setActiveTool('demolish')); inspectBtnUI.addEventListener('click',()=>setActiveTool('inspect'));
+zoneSelect.addEventListener('change',()=>setActiveTool(zoneSelect.value)); natureSelect.addEventListener('change',()=>setActiveTool(natureSelect.value)); civicSelect.addEventListener('change',()=>setActiveTool(civicSelect.value)); setActiveTool('road');
+window.addEventListener('mousemove',onMouseMove); window.addEventListener('click',onCanvasClick); window.addEventListener('keydown',onKeyDown);
+window.addEventListener('resize',()=>{ camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth,window.innerHeight); labelRenderer.setSize(window.innerWidth,window.innerHeight); });
+// Stars
+let starsGeo=new THREE.BufferGeometry(); let starsPos=[]; for(let i=0;i<1200;i++){ starsPos.push((Math.random()-0.5)*500); starsPos.push((Math.random()-0.5)*100+30); starsPos.push((Math.random()-0.5)*200-100); } starsGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(starsPos),3)); scene.add(new THREE.Points(starsGeo,new THREE.PointsMaterial({color:0xcceeff,size:0.2})));
+function animate() { controls.update(); renderer.render(scene,camera); labelRenderer.render(scene,camera); requestAnimationFrame(animate); }
+// Starter roads with bridge + correct park
+setTimeout(() => {
+    let starter = [[0,0],[1,0],[-1,0],[0,1],[0,-1]];
+    for(let [x,z] of starter) if(!isOccupied(x,z)) placeRoad(x,z);
+    placeRoad(2,-2); placeRoad(2,-1); placeRoad(2,0); placeRoad(2,1); placeRoad(2,2);
+    setTimeout(() => {
+        placeZone(1,1,'residential'); placeZone(-1,1,'residential'); placeZone(1,-1,'commercial'); placeZone(3,0,'industrial');
+        // Park at (0,0) with trees correctly centered on each tile
+        placePark(0, 0);
+    }, 200);
+}, 100);
+recalcStats(); animate(); requestAnimationFrame(gameLoop); lastFrameTime=performance.now();
+</script>
+</body>
+</html>
