@@ -216,6 +216,23 @@
             cursor: not-allowed;
         }
 
+        /* Visitor counter styles */
+        .visitor-counter {
+            text-align: center;
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #e2eaf1;
+            font-size: 14px;
+            color: #4a627a;
+            font-weight: 500;
+        }
+        .visitor-counter span {
+            font-weight: 800;
+            color: #1e88e5;
+            font-size: 18px;
+            margin-left: 5px;
+        }
+
         @media (max-width: 860px) {
             .container { padding: 28px; margin: 20px; }
             .games-container { grid-template-columns: 1fr; }
@@ -227,7 +244,7 @@
 </head>
 <body>
 
-<!-- NAVIGATION BAR - only links to Homepage and Secondpage -->
+<!-- NAVIGATION BAR - only links to Homepage and Secondpage (currently commented out) -->
 <!--div class="nav-bar">
     <a href="homepage.html" class="nav-link" data-label="Home"><img class="nav-img" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%231e293b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='1.8' d='M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'/%3E%3C/svg%3E" alt="home"></a>
     <div class="nav-divider"></div>
@@ -250,7 +267,7 @@
             <div class="game-icon">🏙️</div>
             <h2>Metropolis Forge</h2>
             <p>City building game</p>
-            <a href="MetropolisForge.html" target="_blank"class="play-btn">Launch App →</a>
+            <a href="MetropolisForge.html" target="_blank" class="play-btn">Launch App →</a>
         </div>
 
         <div class="game-card">
@@ -267,6 +284,28 @@
             <button class="play-btn" disabled>Coming Soon</button>
         </div>
     </div>
+
+    <!-- Visitor Counter Section -->
+    <div class="visitor-counter">
+        👥 Total visitors (unique browsers): <span id="visitCount">0</span>
+    </div>
 </div>
+
+<script>
+    // Visitor counter using localStorage
+    // Counts each unique browser visit (persistent across sessions)
+    (function() {
+        let count = localStorage.getItem('gamesPageVisitorCount');
+        if (count === null) {
+            // First visit
+            localStorage.setItem('gamesPageVisitorCount', '1');
+            document.getElementById('visitCount').innerText = '1';
+        } else {
+            let newCount = parseInt(count) + 1;
+            localStorage.setItem('gamesPageVisitorCount', newCount);
+            document.getElementById('visitCount').innerText = newCount;
+        }
+    })();
+</script>
 </body>
 </html>
