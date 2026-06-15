@@ -232,6 +232,9 @@
             font-size: 18px;
             margin-left: 5px;
         }
+        .counter-loading {
+            opacity: 0.7;
+        }
 
         @media (max-width: 860px) {
             .container { padding: 28px; margin: 20px; }
@@ -285,26 +288,47 @@
         </div>
     </div>
 
-    <!-- Visitor Counter Section -->
+    <!-- Global Visitor Counter Section (updates for every visitor) -->
     <div class="visitor-counter">
-        👥 Total visitors (unique browsers): <span id="visitCount">0</span>
+        👥 Total unique visitors (all time): <span id="visitCount">---</span>
     </div>
 </div>
 
 <script>
-    // Visitor counter using localStorage
-    // Counts each unique browser visit (persistent across sessions)
+    // Global visitor counter using countapi.xyz
+    // This increments every time any browser loads this page.
     (function() {
-        let count = localStorage.getItem('gamesPageVisitorCount');
-        if (count === null) {
-            // First visit
-            localStorage.setItem('gamesPageVisitorCount', '1');
-            document.getElementById('visitCount').innerText = '1';
-        } else {
-            let newCount = parseInt(count) + 1;
-            localStorage.setItem('gamesPageVisitorCount', newCount);
-            document.getElementById('visitCount').innerText = newCount;
-        }
+        const counterSpan = document.getElementById('visitCount');
+        
+        // Namespace and key for the counter (unique to this page)
+        const namespace = 'evanzgames';
+        const key = 'total_visitors';
+        
+        // Attempt to hit the API to increment and get the new count
+        fetch(`https://api.countapi.xyz/hit/${namespace}/${key}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data && typeof data.value === 'number') {
+                    counterSpan.innerText = data.value;
+                } else {
+                    throw new Error('Invalid response');
+                }
+            })
+            .catch(error => {
+                console.warn('Counter API error:', error);
+                // Fallback: use localStorage as a per-device counter (still counts visits on this device)
+                let localCount = localStorage.getItem('gamesPage_fallbackCount');
+                if (localCount === null) {
+                    localStorage.setItem('gamesPage_fallbackCount', '1');
+                    counterSpan.innerText = '1 (local)';
+                } else {
+                    let newLocal = parseInt(localCount) + 1;
+                    localStorage.setItem('gamesPage_fallbackCount', newLocal);
+                    counterSpan.innerText = newLocal + ' (local)';
+                }
+                counterSpan.style.opacity = '0.8';
+                counterSpan.title = 'Using local fallback counter';
+            });
     })();
 </script>
 </body>
