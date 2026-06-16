@@ -150,6 +150,19 @@
             color: #8899aa;
             margin-top: 5px;
         }
+        .retry-btn {
+            background: #1e88e5;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 30px;
+            font-size: 11px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        .retry-btn:hover {
+            background: #156db8;
+        }
 
         @media (max-width: 860px) {
             .container { padding: 28px; margin: 20px; }
@@ -194,37 +207,79 @@
         </div>
     </div>
 
-    <!-- RELIABLE GLOBAL VISITOR COUNTER (works on GitHub Pages) -->
+    <!-- RELIABLE VISITOR COUNTER (uses multiple fallback APIs) -->
     <div class="visitor-counter">
         🌍 Total global visits: <span id="visitCount">---</span>
-        <div class="counter-note">✅ Live counter – every visit counts</div>
+        <div class="counter-note" id="counterNote">🔄 Loading counter...</div>
     </div>
 </div>
 
 <script>
-    // Use a well‑known, free counter API that works on any static site
-    // (no API key needed, supports CORS, and is actively maintained)
-    (async function() {
+    (function() {
         const counterSpan = document.getElementById('visitCount');
-        const namespace = 'evanz-games-page';
-        const key = 'total-visits';
-
-        try {
-            // Attempt to increment and fetch the new count
-            const response = await fetch(`https://api.countapi.xyz/hit/${namespace}/${key}`);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
-            if (data && typeof data.value === 'number') {
-                counterSpan.innerText = data.value.toLocaleString();
-                document.querySelector('.counter-note').innerHTML = '✅ Global counter updated (every visit counted)';
-            } else {
-                throw new Error('Invalid API response');
+        const noteSpan = document.getElementById('counterNote');
+        
+        // List of alternative counter APIs (try each until one works)
+        const apis = [
+            // Primary: countapi.xyz (most popular)
+            {
+                url: 'https://api.countapi.xyz/hit/evanz-games-page/total-visits',
+                parse: (data) => data.value
+            },
+            // Backup 1: same service but different namespace
+            {
+                url: 'https://api.countapi.xyz/hit/evanz.games/visitor_counter',
+                parse: (data) => data.value
+            },
+            // Backup 2: another free counter service (no API key)
+            {
+                url: 'https://counterapi.xyz/hit/evanz-games-page/total-visits',
+                parse: (data) => data.value
             }
-        } catch (error) {
-            console.error('Counter error:', error);
-            counterSpan.innerText = '⚠️';
-            document.querySelector('.counter-note').innerHTML = '⚠️ Counter temporarily offline. Refresh to retry.';
+        ];
+        
+        let currentApiIndex = 0;
+        
+        function tryApi() {
+            if (currentApiIndex >= apis.length) {
+                // All APIs failed – show friendly error and a retry button
+                counterSpan.innerText = '⚠️';
+                noteSpan.innerHTML = 'Counter temporarily unavailable. <button id="retryCounter" class="retry-btn">Retry</button>';
+                const retryBtn = document.getElementById('retryCounter');
+                if (retryBtn) {
+                    retryBtn.addEventListener('click', () => {
+                        currentApiIndex = 0;
+                        counterSpan.innerText = '---';
+                        noteSpan.innerHTML = '🔄 Retrying...';
+                        tryApi();
+                    });
+                }
+                return;
+            }
+            
+            const api = apis[currentApiIndex];
+            fetch(api.url, { cache: 'no-store' })
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    const count = api.parse(data);
+                    if (typeof count === 'number') {
+                        counterSpan.innerText = count.toLocaleString();
+                        noteSpan.innerHTML = '✅ Global counter (every visit counted)';
+                    } else {
+                        throw new Error('Invalid count format');
+                    }
+                })
+                .catch(error => {
+                    console.warn(`API ${currentApiIndex} failed:`, error);
+                    currentApiIndex++;
+                    tryApi();
+                });
         }
+        
+        tryApi();
     })();
 </script>
 </body>
