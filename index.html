@@ -139,35 +139,17 @@
             color: #4a627a;
             font-weight: 500;
         }
-        .visitor-counter span {
-            font-weight: 800;
-            color: #1e88e5;
-            font-size: 18px;
-            margin-left: 5px;
+        .visitor-counter img {
+            vertical-align: middle;
+            margin-left: 8px;
+            border-radius: 8px;
+            background: #f0f4f9;
+            padding: 4px 8px;
         }
         .counter-note {
             font-size: 11px;
             color: #8899aa;
             margin-top: 5px;
-        }
-        .retry-btn {
-            background: #1e88e5;
-            color: white;
-            border: none;
-            padding: 4px 12px;
-            border-radius: 30px;
-            font-size: 11px;
-            cursor: pointer;
-            margin-left: 10px;
-        }
-        .retry-btn:hover {
-            background: #156db8;
-        }
-
-        @media (max-width: 860px) {
-            .container { padding: 28px; margin: 20px; }
-            .games-container { grid-template-columns: 1fr; }
-            .page-title { font-size: 32px; }
         }
     </style>
 </head>
@@ -207,80 +189,17 @@
         </div>
     </div>
 
-    <!-- RELIABLE VISITOR COUNTER (uses multiple fallback APIs) -->
+    <!-- VISITOR COUNTER (image-based, no CORS issues) -->
     <div class="visitor-counter">
-        🌍 Total global visits: <span id="visitCount">---</span>
-        <div class="counter-note" id="counterNote">🔄 Loading counter...</div>
+        🌍 Total global visits:
+        <img src="https://www.hitwebcounter.com/counter/counter.php?page=12345678&style=0001&nbdigits=6&type=page&initCount=1" alt="Visitor Counter">
+        <div class="counter-note">✅ Real‑time global counter (updates on every page load)</div>
     </div>
+    <!-- hitwebcounter Code START -->
+<a href="https://www.hitwebcounter.com/" target="_blank" rel="noopener" title="https://www.hitwebcounter.com/">
+<img src="https://www.hitwebcounter.com/counter/counter.php?page=21504262&amp;style=0006&amp;nbdigits=5&amp;type=page" alt="https://www.hitwebcounter.com/" decoding="async" style="border:0;max-width:100%;height:auto;" />
+</a>
+<!-- hitwebcounter Code END -->
 </div>
-
-<script>
-    (function() {
-        const counterSpan = document.getElementById('visitCount');
-        const noteSpan = document.getElementById('counterNote');
-        
-        // List of alternative counter APIs (try each until one works)
-        const apis = [
-            // Primary: countapi.xyz (most popular)
-            {
-                url: 'https://api.countapi.xyz/hit/evanz-games-page/total-visits',
-                parse: (data) => data.value
-            },
-            // Backup 1: same service but different namespace
-            {
-                url: 'https://api.countapi.xyz/hit/evanz.games/visitor_counter',
-                parse: (data) => data.value
-            },
-            // Backup 2: another free counter service (no API key)
-            {
-                url: 'https://counterapi.xyz/hit/evanz-games-page/total-visits',
-                parse: (data) => data.value
-            }
-        ];
-        
-        let currentApiIndex = 0;
-        
-        function tryApi() {
-            if (currentApiIndex >= apis.length) {
-                // All APIs failed – show friendly error and a retry button
-                counterSpan.innerText = '⚠️';
-                noteSpan.innerHTML = 'Counter temporarily unavailable. <button id="retryCounter" class="retry-btn">Retry</button>';
-                const retryBtn = document.getElementById('retryCounter');
-                if (retryBtn) {
-                    retryBtn.addEventListener('click', () => {
-                        currentApiIndex = 0;
-                        counterSpan.innerText = '---';
-                        noteSpan.innerHTML = '🔄 Retrying...';
-                        tryApi();
-                    });
-                }
-                return;
-            }
-            
-            const api = apis[currentApiIndex];
-            fetch(api.url, { cache: 'no-store' })
-                .then(response => {
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    return response.json();
-                })
-                .then(data => {
-                    const count = api.parse(data);
-                    if (typeof count === 'number') {
-                        counterSpan.innerText = count.toLocaleString();
-                        noteSpan.innerHTML = '✅ Global counter (every visit counted)';
-                    } else {
-                        throw new Error('Invalid count format');
-                    }
-                })
-                .catch(error => {
-                    console.warn(`API ${currentApiIndex} failed:`, error);
-                    currentApiIndex++;
-                    tryApi();
-                });
-        }
-        
-        tryApi();
-    })();
-</script>
 </body>
 </html>
