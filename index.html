@@ -151,6 +151,121 @@
             color: #8899aa;
             margin-top: 5px;
         }
+
+        /* Rating & Review styles */
+        .rating-section {
+            margin-top: 20px;
+            border-top: 1px solid #e2eaf1;
+            padding-top: 16px;
+            text-align: left;
+            font-size: 14px;
+        }
+        .stars {
+            display: inline-flex;
+            gap: 4px;
+            cursor: pointer;
+            margin: 4px 0;
+        }
+        .stars span {
+            font-size: 28px;
+            color: #d1d5db;
+            transition: color 0.1s;
+            user-select: none;
+        }
+        .stars span.active {
+            color: #fbbf24;
+        }
+        .stars span:hover {
+            color: #f59e0b;
+        }
+        .rating-display {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .avg-rating {
+            font-weight: 700;
+            color: #0a3452;
+        }
+        .review-list {
+            margin: 10px 0;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        .review-item {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        .review-item strong {
+            color: #0a3452;
+        }
+        .review-item .date {
+            font-size: 10px;
+            color: #8899aa;
+            margin-left: 6px;
+        }
+        .review-form {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .review-form input,
+        .review-form textarea {
+            padding: 8px 12px;
+            border-radius: 30px;
+            border: 1px solid #d1d5db;
+            font-family: inherit;
+            font-size: 13px;
+            background: white;
+            width: 100%;
+        }
+        .review-form textarea {
+            border-radius: 16px;
+            resize: vertical;
+            min-height: 50px;
+        }
+        .review-form button {
+            background: #1e88e5;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-weight: 600;
+            cursor: pointer;
+            align-self: flex-start;
+        }
+        .review-form button:hover {
+            background: #156db8;
+        }
+        .no-reviews {
+            color: #8899aa;
+            font-style: italic;
+            font-size: 13px;
+        }
+        .clear-ratings-btn {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 30px;
+            font-size: 11px;
+            cursor: pointer;
+            margin-left: 12px;
+        }
+        .clear-ratings-btn:hover {
+            background: #dc2626;
+        }
+
+        @media (max-width: 860px) {
+            .container { padding: 28px; margin: 20px; }
+            .games-container { grid-template-columns: 1fr; }
+            .page-title { font-size: 32px; }
+        }
     </style>
 </head>
 <body>
@@ -160,32 +275,46 @@
     <div class="page-subtitle">Interactive apps and games built with HTML, CSS, and JavaScript</div>
 
     <div class="games-container">
-        <div class="game-card">
+        <!-- Stray Cargo -->
+        <div class="game-card" data-game-id="straycargo">
             <div class="game-icon">🚂</div>
             <h2>Stray Cargo</h2>
             <p>A game about catching falling objects while using a train</p>
             <a href="StrayCargo.html" target="_blank" class="play-btn">Launch App →</a>
+            <div class="rating-section" id="ratings-straycargo">
+                <!-- dynamic content -->
+            </div>
         </div>
 
-        <div class="game-card">
+        <!-- Metropolis Forge -->
+        <div class="game-card" data-game-id="metropolisforge">
             <div class="game-icon">🏙️</div>
             <h2>Metropolis Forge</h2>
             <p>City building game</p>
             <a href="MetropolisForge.html" target="_blank" class="play-btn">Launch App →</a>
+            <div class="rating-section" id="ratings-metropolisforge">
+                <!-- dynamic content -->
+            </div>
         </div>
 
-        <div class="game-card">
+        <!-- Circlehead Hero -->
+        <div class="game-card" data-game-id="circleheadhero">
             <div class="game-icon">⚔️</div>
             <h2>Circlehead Hero</h2>
             <p>A turn‑based dungeon crawler. Defeat enemies, collect weapons & potions, fight bosses every 10 rooms. WASD to move, SPACEBAR to heal.</p>
             <a href="CircleheadHero.html" target="_blank" class="play-btn">Launch App →</a>
+            <div class="rating-section" id="ratings-circleheadhero">
+                <!-- dynamic content -->
+            </div>
         </div>
 
+        <!-- Coming Soon -->
         <div class="game-card coming-soon">
             <div class="game-icon">❓</div>
             <h2>Quiz Challenge</h2>
             <p>Test your knowledge with interactive quizzes. Coming soon!</p>
             <button class="play-btn" disabled>Coming Soon</button>
+            <!-- no ratings for coming soon -->
         </div>
     </div>
 
@@ -193,13 +322,158 @@
     <div class="visitor-counter">
         🌍 Total global visits:
         <a href="https://www.hitwebcounter.com/" target="_blank" rel="noopener" title="https://www.hitwebcounter.com/">
-            <img src="https://www.hitwebcounter.com/counter/counter.php?page=21504262&amp;style=0006&amp;nbdigits=5&amp;type=page" alt="https://www.hitwebcounter.com/" decoding="async" style="border:0;max-width:100%;height:auto;" />
-</a>
+            <img src="https://www.hitwebcounter.com/counter/counter.php?page=21504262&amp;style=0006&amp;nbdigits=5&amp;type=page" alt="Visitor Counter" decoding="async" style="border:0;max-width:100%;height:auto;" />
+        </a>
         <div class="counter-note">✅ Real‑time global counter (updates on every page load)</div>
     </div>
-    <!-- hitwebcounter Code START -->
-
-<!-- hitwebcounter Code END -->
 </div>
+
+<script>
+    // Rating & Review system using localStorage (per device)
+    (function() {
+        // Utility: get game data from localStorage
+        function getGameData(gameId) {
+            const key = `game_${gameId}_data`;
+            const stored = localStorage.getItem(key);
+            if (stored) {
+                try {
+                    return JSON.parse(stored);
+                } catch (e) { /* ignore */ }
+            }
+            return { ratings: [], reviews: [] };
+        }
+
+        function saveGameData(gameId, data) {
+            const key = `game_${gameId}_data`;
+            localStorage.setItem(key, JSON.stringify(data));
+        }
+
+        // Render a game's rating and reviews
+        function renderGame(gameId) {
+            const container = document.getElementById(`ratings-${gameId}`);
+            if (!container) return;
+
+            const data = getGameData(gameId);
+            const ratings = data.ratings || [];
+            const reviews = data.reviews || [];
+
+            // Compute average rating
+            let avg = 0;
+            if (ratings.length > 0) {
+                const sum = ratings.reduce((a, b) => a + b, 0);
+                avg = sum / ratings.length;
+            }
+
+            // Build HTML
+            let html = '';
+
+            // Rating display
+            html += `<div class="rating-display">`;
+            html += `<div class="stars" data-game-id="${gameId}">`;
+            for (let i = 1; i <= 5; i++) {
+                const active = (i <= Math.round(avg)) ? 'active' : '';
+                html += `<span data-value="${i}" class="${active}">★</span>`;
+            }
+            html += `</div>`;
+            html += `<span class="avg-rating">${avg.toFixed(1)} / 5</span>`;
+            html += `<span style="color:#8899aa;font-size:13px;">(${ratings.length} ratings)</span>`;
+            html += `<button class="clear-ratings-btn" data-game-id="${gameId}">Clear Ratings</button>`;
+            html += `</div>`;
+
+            // Reviews list
+            html += `<div class="review-list">`;
+            if (reviews.length === 0) {
+                html += `<div class="no-reviews">No reviews yet. Be the first!</div>`;
+            } else {
+                // Show latest 3 reviews
+                const latest = reviews.slice(-3).reverse();
+                latest.forEach(r => {
+                    html += `<div class="review-item"><strong>${escapeHtml(r.name)}</strong> <span class="date">${r.date}</span><br>${escapeHtml(r.comment)}</div>`;
+                });
+                if (reviews.length > 3) {
+                    html += `<div style="font-size:12px;color:#8899aa;">+ ${reviews.length - 3} more review(s)</div>`;
+                }
+            }
+            html += `</div>`;
+
+            // Review form
+            html += `<div class="review-form">`;
+            html += `<input type="text" id="review-name-${gameId}" placeholder="Your name" maxlength="30" />`;
+            html += `<textarea id="review-comment-${gameId}" placeholder="Write a review..." rows="2"></textarea>`;
+            html += `<button class="submit-review" data-game-id="${gameId}">Submit Review</button>`;
+            html += `</div>`;
+
+            container.innerHTML = html;
+
+            // Attach star click events
+            const starsContainer = container.querySelector('.stars');
+            if (starsContainer) {
+                const starSpans = starsContainer.querySelectorAll('span');
+                starSpans.forEach(span => {
+                    span.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        const gameId = this.closest('.stars').dataset.gameId;
+                        const value = parseInt(this.dataset.value);
+                        // Save rating
+                        const data = getGameData(gameId);
+                        data.ratings.push(value);
+                        saveGameData(gameId, data);
+                        renderGame(gameId); // re-render
+                    });
+                });
+            }
+
+            // Attach clear ratings button
+            const clearBtn = container.querySelector('.clear-ratings-btn');
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function() {
+                    const gameId = this.dataset.gameId;
+                    if (confirm('Clear all ratings for this game?')) {
+                        const data = getGameData(gameId);
+                        data.ratings = [];
+                        saveGameData(gameId, data);
+                        renderGame(gameId);
+                    }
+                });
+            }
+
+            // Attach submit review
+            const submitBtn = container.querySelector('.submit-review');
+            if (submitBtn) {
+                submitBtn.addEventListener('click', function() {
+                    const gameId = this.dataset.gameId;
+                    const nameInput = document.getElementById(`review-name-${gameId}`);
+                    const commentInput = document.getElementById(`review-comment-${gameId}`);
+                    const name = nameInput.value.trim();
+                    const comment = commentInput.value.trim();
+                    if (!name || !comment) {
+                        alert('Please fill in both name and comment.');
+                        return;
+                    }
+                    const data = getGameData(gameId);
+                    data.reviews.push({
+                        name: name,
+                        comment: comment,
+                        date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                    });
+                    saveGameData(gameId, data);
+                    renderGame(gameId);
+                });
+            }
+        }
+
+        // Simple escape to prevent XSS (though localStorage is per device)
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Render all games with ratings
+        const gameIds = ['straycargo', 'metropolisforge', 'circleheadhero'];
+        gameIds.forEach(id => renderGame(id));
+    })();
+</script>
+
 </body>
 </html>
