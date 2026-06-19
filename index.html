@@ -159,7 +159,27 @@
             padding-top: 16px;
             text-align: left;
             font-size: 14px;
+            display: none; /* hidden by default; toggled by button */
         }
+        .rating-section.visible {
+            display: block;
+        }
+        .toggle-reviews-btn {
+            background: #1e88e5;
+            color: white;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 40px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 16px;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .toggle-reviews-btn:hover {
+            background: #156db8;
+        }
+
         .stars {
             display: inline-flex;
             gap: 4px;
@@ -281,6 +301,7 @@
             <h2>Stray Cargo</h2>
             <p>A game about catching falling objects while using a train</p>
             <a href="StrayCargo.html" target="_blank" class="play-btn">Launch App →</a>
+            <button class="toggle-reviews-btn" data-target="ratings-straycargo">📝 Review</button>
             <div class="rating-section" id="ratings-straycargo">
                 <!-- dynamic content -->
             </div>
@@ -292,6 +313,7 @@
             <h2>Metropolis Forge</h2>
             <p>City building game</p>
             <a href="MetropolisForge.html" target="_blank" class="play-btn">Launch App →</a>
+            <button class="toggle-reviews-btn" data-target="ratings-metropolisforge">📝 Review</button>
             <div class="rating-section" id="ratings-metropolisforge">
                 <!-- dynamic content -->
             </div>
@@ -303,6 +325,7 @@
             <h2>Circlehead Hero</h2>
             <p>A turn‑based dungeon crawler. Defeat enemies, collect weapons & potions, fight bosses every 10 rooms. WASD to move, SPACEBAR to heal.</p>
             <a href="CircleheadHero.html" target="_blank" class="play-btn">Launch App →</a>
+            <button class="toggle-reviews-btn" data-target="ratings-circleheadhero">📝 Review</button>
             <div class="rating-section" id="ratings-circleheadhero">
                 <!-- dynamic content -->
             </div>
@@ -314,7 +337,6 @@
             <h2>Quiz Challenge</h2>
             <p>Test your knowledge with interactive quizzes. Coming soon!</p>
             <button class="play-btn" disabled>Coming Soon</button>
-            <!-- no ratings for coming soon -->
         </div>
     </div>
 
@@ -414,7 +436,6 @@
                         e.stopPropagation();
                         const gameId = this.closest('.stars').dataset.gameId;
                         const value = parseInt(this.dataset.value);
-                        // Save rating
                         const data = getGameData(gameId);
                         data.ratings.push(value);
                         saveGameData(gameId, data);
@@ -462,16 +483,45 @@
             }
         }
 
-        // Simple escape to prevent XSS (though localStorage is per device)
+        // Simple escape to prevent XSS
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
 
-        // Render all games with ratings
-        const gameIds = ['straycargo', 'metropolisforge', 'circleheadhero'];
-        gameIds.forEach(id => renderGame(id));
+        // Toggle visibility of rating sections
+        function toggleRatingSection(sectionId, button) {
+            const section = document.getElementById(sectionId);
+            if (!section) return;
+            const isVisible = section.classList.contains('visible');
+            if (isVisible) {
+                section.classList.remove('visible');
+                button.textContent = '📝 Review';
+            } else {
+                section.classList.add('visible');
+                button.textContent = '✖ Hide Reviews';
+                // Render content if not yet rendered (check if empty)
+                if (section.children.length === 0) {
+                    // Extract gameId from section id
+                    const gameId = sectionId.replace('ratings-', '');
+                    renderGame(gameId);
+                }
+            }
+        }
+
+        // Attach toggle buttons
+        document.querySelectorAll('.toggle-reviews-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const targetId = this.dataset.target;
+                toggleRatingSection(targetId, this);
+            });
+        });
+
+        // Optionally, we can pre‑render all rating sections on page load (hidden)
+        // so they are ready when toggled. We'll render on demand above.
+        // But we need to ensure that if a section is already visible (e.g., if we want to start visible?), we can set visible class.
+        // We'll keep them hidden initially.
     })();
 </script>
 
