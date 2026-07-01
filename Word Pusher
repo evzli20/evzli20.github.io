@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Push & Pull – Space to Pull</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(145deg, #0b0a1a, #1f1b3b, #2a2448);
+      padding: 12px;
+      margin: 0;
+    }
+    .game {
+      background: rgba(255,255,255,0.06);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-radius: 40px;
+      padding: 24px 20px 28px;
+      max-width: 680px;
+      width: 100%;
+      border: 1px solid rgba(255,255,255,0.05);
+      box-shadow: 0 30px 60px rgba(0,0,0,0.6);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      color: #fff;
+    }
+    .title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 1.2rem;
+    }
+    .title-icon { font-size: 1.5rem; }
+    .stats {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-weight: 500;
+      font-size: 0.85rem;
+      background: rgba(255,255,255,0.06);
+      padding: 4px 14px;
+      border-radius: 40px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .stats span { padding: 4px 8px; }
+    .level-badge {
+      background: linear-gradient(135deg, #f093fb, #f5576c);
+      border-radius: 30px;
+      padding: 4px 14px !important;
+      color: #fff;
+      font-weight: 700;
+    }
+    .picture-area {
+      text-align: center;
+      margin-bottom: 14px;
+    }
+    .emoji-display {
+      font-size: 4.2rem;
+      display: inline-block;
+      padding: 8px 32px;
+      border-radius: 60px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.06);
+      transition: transform 0.3s;
+    }
+    .emoji-display.pop { animation: popEmoji 0.5s ease; }
+    @keyframes popEmoji {
+      0% { transform: scale(0.6) rotate(-6deg); opacity: 0.3; }
+      60% { transform: scale(1.2) rotate(3deg); }
+      100% { transform: scale(1) rotate(0); opacity: 1; }
+    }
+    .hint-text {
+      color: rgba(255,255,255,0.3);
+      font-size: 0.75rem;
+      margin-top: 4px;
+      letter-spacing: 1px;
+      font-weight: 300;
+    }
+    .board-wrapper {
+      position: relative;
+      margin: 12px auto;
+      aspect-ratio: 1 / 1;
+      max-width: 520px;
+      width: 100%;
+      background: rgba(0,0,0,0.35);
+      border-radius: 24px;
+      padding: 6px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .board {
+      display: grid;
+      gap: 3px;
+      width: 100%;
+      height: 100%;
+      grid-template-columns: repeat(9, 1fr);
+      grid-template-rows: repeat(9, 1fr);
+    }
+    .cell {
+      background: rgba(255,255,255,0.04);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #fff;
+      transition: background 0.15s;
+      position: relative;
+      min-height: 32px;
+    }
+    .cell.wall {
+      background: rgba(255,255,255,0.02);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+    }
+    .cell .letter-tile {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(145deg, rgba(255,255,255,0.15), rgba(255,255,255,0.04));
+      border-radius: 6px;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      transition: all 0.15s;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .cell .letter-tile.highlight {
+      animation: glowPulse 0.8s ease 2;
+      border-color: #f6d365;
+      box-shadow: 0 0 24px rgba(246,211,101,0.3);
+    }
+    @keyframes glowPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    .cell .character {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      background: radial-gradient(circle at 30% 30%, #4facfe, #1f3b8c);
+      border-radius: 50%;
+      border: 2px solid #8ec5fc;
+      box-shadow: 0 4px 16px rgba(79,172,254,0.4);
+      transition: all 0.12s;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      line-height: 1;
+    }
+    .cell.door {
+      background: rgba(255,100,0,0.1);
+      border: 2px solid rgba(255,100,0,0.2);
+      font-size: 1.8rem;
+    }
+    .cell.door-open {
+      background: rgba(0,255,100,0.1);
+      border: 2px solid rgba(0,255,100,0.3);
+      animation: doorGlow 1s infinite alternate;
+    }
+    @keyframes doorGlow {
+      0% { box-shadow: 0 0 10px rgba(0,255,100,0.1); }
+      100% { box-shadow: 0 0 30px rgba(0,255,100,0.3); }
+    }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .dpad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      max-width: 180px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .dpad-btn {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      padding: 12px 0;
+      font-size: 1.6rem;
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.15s;
+      touch-action: manipulation;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+    .dpad-btn:active { transform: scale(0.92); background: rgba(255,255,255,0.15); }
+    .dpad-btn.empty {
+      background: transparent;
+      box-shadow: none;
+      border: none;
+      cursor: default;
+      pointer-events: none;
+    }
+    .action-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 4px;
+    }
+    .btn {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 40px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: #fff;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.06);
+      cursor: pointer;
+      transition: all 0.15s;
+      touch-action: manipulation;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn:active { transform: scale(0.95); }
+    .btn-reset { background: rgba(255,107,107,0.15); border-color: rgba(255,107,107,0.2); color: #ff6b6b; }
+    .btn-reset:active { background: rgba(255,107,107,0.25); }
+    .btn-hint { background: rgba(246,211,101,0.12); border-color: rgba(246,211,101,0.2); color: #f6d365; }
+    .btn-hint:active { background: rgba(246,211,101,0.25); }
+    .feedback {
+      text-align: center;
+      min-height: 28px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      margin-top: 10px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      color: rgba(255,255,255,0.5);
+      transition: all 0.3s;
+    }
+    .feedback.success { color: #43e97b; background: rgba(67,233,123,0.12); }
+    .feedback.error { color: #ff6b6b; background: rgba(255,107,107,0.12); animation: shake 0.4s ease; }
+    .feedback.info { color: #f6d365; background: rgba(246,211,101,0.12); }
+    .feedback.win { color: #fff; background: rgba(255,215,0,0.2); font-size: 1.2rem; animation: popEmoji 0.6s ease; }
+    .feedback.mode { color: #4facfe; background: rgba(79,172,254,0.12); }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20% { transform: translateX(-8px); }
+      40% { transform: translateX(8px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+    .confetti-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 999;
+      overflow: hidden;
+    }
+    .confetti-piece {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      animation: confettiFall linear forwards;
+    }
+    @keyframes confettiFall {
+      0% { opacity:1; transform: translateY(-20px) rotate(0deg) scale(1); }
+      100% { opacity:0; transform: translateY(110vh) rotate(720deg) scale(0.2); }
+    }
+    .mode-indicator {
+      color: rgba(255,255,255,0.6);
+      font-size: 0.8rem;
+      font-weight: 500;
+      padding: 4px 16px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.06);
+      transition: all 0.3s;
+      min-width: 140px;
+      text-align: center;
+    }
+    .mode-indicator.pull {
+      color: #f6d365;
+      border-color: rgba(246,211,101,0.3);
+      background: rgba(246,211,101,0.08);
+      box-shadow: 0 0 20px rgba(246,211,101,0.05);
+    }
+    .mode-indicator.push {
+      color: #4facfe;
+      border-color: rgba(79,172,254,0.15);
+    }
+    .key-hint {
+      color: rgba(255,255,255,0.2);
+      font-size: 0.7rem;
+      margin-top: 2px;
+      letter-spacing: 0.5px;
+    }
+    @media (max-width: 480px) {
+      .game { padding: 16px 12px 20px; }
+      .emoji-display { font-size: 3.2rem; padding: 4px 20px; }
+      .cell { font-size: 1rem; min-height: 28px; }
+      .cell .letter-tile { font-size: 1.2rem; }
+      .cell .character { font-size: 1.4rem; }
+      .board { gap: 2px; }
+      .dpad-btn { padding: 10px 0; font-size: 1.3rem; }
+      .btn { padding: 8px 16px; font-size: 0.8rem; }
+      .stats { font-size: 0.7rem; padding: 2px 10px; }
+      .title { font-size: 1rem; }
+      .mode-indicator { font-size: 0.7rem; min-width: 100px; padding: 3px 12px; }
+    }
+    @media (max-width: 380px) {
+      .cell .letter-tile { font-size: 1rem; }
+      .cell .character { font-size: 1.2rem; }
+      .dpad-btn { padding: 8px 0; font-size: 1.1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="game">
+  <div class="header">
+    <div class="title"><span class="title-icon">🚀</span><span>Push & Pull</span></div>
+    <div class="stats">
+      <span class="level-badge" id="levelDisplay">Lv.1</span>
+      <span id="scoreDisplay">⭐ 0</span>
+    </div>
+  </div>
+  <div class="picture-area">
+    <div class="emoji-display" id="emojiDisplay">🐱</div>
+    <div class="hint-text" id="hintText">🔍 What word does this picture show?</div>
+  </div>
+  <div class="board-wrapper">
+    <div class="board" id="board"></div>
+  </div>
+  <div class="feedback" id="feedback"></div>
+  <div class="controls">
+    <div class="dpad">
+      <div class="dpad-btn empty"></div>
+      <button class="dpad-btn" id="upBtn" aria-label="Up">⬆</button>
+      <div class="dpad-btn empty"></div>
+      <button class="dpad-btn" id="leftBtn" aria-label="Left">⬅</button>
+      <button class="dpad-btn" id="downBtn" aria-label="Down">⬇</button>
+      <button class="dpad-btn" id="rightBtn" aria-label="Right">➡</button>
+    </div>
+    <div class="action-row">
+      <button class="btn btn-hint" id="hintBtn">💡 Hint</button>
+      <button class="btn btn-reset" id="resetBtn">⟳ Reset</button>
+    </div>
+    <div class="mode-indicator push" id="modeIndicator">⚡ Push mode</div>
+    <div class="key-hint">[ Spacebar to toggle Pull ]</div>
+  </div>
+</div>
+<div class="confetti-container" id="confettiContainer"></div>
+
+<script>
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  LEVEL DATA
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const LEVELS = [
+  { emoji: '🐱', word: 'CAT' },
+  { emoji: '🐶', word: 'DOG' },
+  { emoji: '🌞', word: 'SUN' },
+  { emoji: '🌸', word: 'FLOWER' },
+  { emoji: '🏆', word: 'CUP' },
+  { emoji: '⭐', word: 'STAR' },
+  { emoji: '🌙', word: 'MOON' },
+  { emoji: '🍎', word: 'APPLE' },
+  { emoji: '🚗', word: 'CAR' },
+  { emoji: '🌳', word: 'TREE' },
+  { emoji: '🌈', word: 'RAINBOW' },
+  { emoji: '❄️', word: 'SNOW' },
+  { emoji: '🎵', word: 'MUSIC' },
+  { emoji: '🏠', word: 'HOUSE' },
+  { emoji: '🌊', word: 'WATER' }
+];
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  STATE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let currentLevel = 0;
+let score = 0;
+let grid = [];
+let player = { row: 1, col: 1 };
+let word = '';
+let emoji = '';
+const ROWS = 9;
+const COLS = 9;
+const DOOR_ROW = 4;
+const DOOR_COL = 7;
+let doorOpen = false;
+let levelComplete = false;
+let hintCount = 3;
+let isAnimating = false;
+let pullMode = false; // false = push only, true = pull enabled
+
+const boardEl = document.getElementById('board');
+const emojiDisplay = document.getElementById('emojiDisplay');
+const hintText = document.getElementById('hintText');
+const feedback = document.getElementById('feedback');
+const levelDisplay = document.getElementById('levelDisplay');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const resetBtn = document.getElementById('resetBtn');
+const hintBtn = document.getElementById('hintBtn');
+const modeIndicator = document.getElementById('modeIndicator');
+const upBtn = document.getElementById('upBtn');
+const downBtn = document.getElementById('downBtn');
+const leftBtn = document.getElementById('leftBtn');
+const rightBtn = document.getElementById('rightBtn');
+const confettiContainer = document.getElementById('confettiContainer');
+
+function setFeedback(text, type = '') {
+  feedback.textContent = text;
+  feedback.className = 'feedback' + (type ? ' ' + type : '');
+}
+function clearFeedback() { feedback.textContent = ''; feedback.className = 'feedback'; }
+function updateUI() {
+  levelDisplay.textContent = 'Lv.' + (currentLevel + 1);
+  scoreDisplay.textContent = '⭐ ' + score;
+}
+function fireConfetti(count = 120) {
+  const container = confettiContainer;
+  const colors = ['#f6d365','#fda085','#f093fb','#4facfe','#43e97b','#ff6b6b','#ffd93d','#a29bfe'];
+  for (let i = 0; i < count; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    const size = 6 + Math.random() * 10;
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const left = Math.random() * 100;
+    const delay = Math.random() * 1.6;
+    const duration = 2 + Math.random() * 2.5;
+    const rotation = Math.random() * 360;
+    piece.style.cssText = `
+      left: ${left}%;
+      width: ${size}px;
+      height: ${size * (0.4 + Math.random() * 0.8)}px;
+      background: ${color};
+      animation-delay: ${delay}s;
+      animation-duration: ${duration}s;
+      transform: rotate(${rotation}deg);
+      border-radius: ${Math.random() > 0.5 ? '50%' : '2px'};
+    `;
+    container.appendChild(piece);
+    setTimeout(() => piece.remove(), (delay + duration) * 1000 + 200);
+  }
+}
+
+function updateModeUI() {
+  if (pullMode) {
+    modeIndicator.textContent = '🔄 Pull mode ON';
+    modeIndicator.className = 'mode-indicator pull';
+  } else {
+    modeIndicator.textContent = '⚡ Push mode';
+    modeIndicator.className = 'mode-indicator push';
+  }
+}
+
+function togglePull() {
+  pullMode = !pullMode;
+  updateModeUI();
+  setFeedback(pullMode ? '🔄 Pull enabled – letters come toward you!' : '⚡ Push mode – letters move away from you!', 'mode');
+  setTimeout(() => {
+    if (!doorOpen && !levelComplete) clearFeedback();
+  }, 1200);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  LEVEL BUILDER
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function buildLevel(level) {
+  word = level.word;
+  emoji = level.emoji;
+  const len = word.length;
+
+  grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1) {
+        grid[r][c] = 'wall';
+      }
+    }
+  }
+  grid[DOOR_ROW][DOOR_COL] = null;
+
+  const usedCells = new Set();
+  for (let i = 0; i < len; i++) {
+    let placed = false;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const r = 1 + Math.floor(Math.random() * 5);
+      const c = 1 + Math.floor(Math.random() * 6);
+      if (grid[r][c] === null && !usedCells.has(r + ',' + c) && !(r === DOOR_ROW && c === DOOR_COL)) {
+        grid[r][c] = { char: word[i] };
+        usedCells.add(r + ',' + c);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      for (let r = 1; r <= 5; r++) {
+        let found = false;
+        for (let c = 1; c <= 6; c++) {
+          if (grid[r][c] === null && !usedCells.has(r + ',' + c) && !(r === DOOR_ROW && c === DOOR_COL)) {
+            grid[r][c] = { char: word[i] };
+            usedCells.add(r + ',' + c);
+            found = true;
+            break;
+          }
+        }
+        if (found) break;
+      }
+    }
+  }
+
+  const extraCount = 3 + Math.floor(Math.random() * 2);
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const wordSet = new Set(word.split(''));
+  const available = alphabet.split('').filter(ch => !wordSet.has(ch));
+  const shuffled = available.sort(() => Math.random() - 0.5);
+  const extraChars = shuffled.slice(0, extraCount);
+
+  for (const ch of extraChars) {
+    let placed = false;
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const r = 1 + Math.floor(Math.random() * 5);
+      const c = 1 + Math.floor(Math.random() * 6);
+      if (grid[r][c] === null && !usedCells.has(r + ',' + c) && !(r === DOOR_ROW && c === DOOR_COL)) {
+        grid[r][c] = { char: ch };
+        usedCells.add(r + ',' + c);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      for (let r = 1; r <= 5; r++) {
+        let found = false;
+        for (let c = 1; c <= 6; c++) {
+          if (grid[r][c] === null && !usedCells.has(r + ',' + c) && !(r === DOOR_ROW && c === DOOR_COL)) {
+            grid[r][c] = { char: ch };
+            usedCells.add(r + ',' + c);
+            found = true;
+            break;
+          }
+        }
+        if (found) break;
+      }
+    }
+  }
+
+  player.row = 1;
+  player.col = 1;
+  if (grid[player.row][player.col] !== null || (player.row === DOOR_ROW && player.col === DOOR_COL)) {
+    for (let r = 1; r < ROWS - 1; r++) {
+      let found = false;
+      for (let c = 1; c < COLS - 1; c++) {
+        if (grid[r][c] === null && !(r === DOOR_ROW && c === DOOR_COL)) {
+          player.row = r; player.col = c; found = true; break;
+        }
+      }
+      if (found) break;
+    }
+  }
+
+  doorOpen = false;
+  levelComplete = false;
+  hintCount = 3;
+  hintBtn.textContent = '💡 Hint';
+  hintBtn.disabled = false;
+  pullMode = false;
+  updateModeUI();
+
+  emojiDisplay.textContent = emoji;
+  emojiDisplay.classList.remove('pop');
+  void emojiDisplay.offsetWidth;
+  emojiDisplay.classList.add('pop');
+  hintText.textContent = '🔍 What word does this picture show?';
+  updateUI();
+  clearFeedback();
+  renderBoard();
+  checkWin();
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  RENDER
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function renderBoard() {
+  boardEl.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
+  boardEl.style.gridTemplateRows = `repeat(${ROWS}, 1fr)`;
+  boardEl.innerHTML = '';
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.row = r;
+      cell.dataset.col = c;
+
+      const content = grid[r][c];
+      const isDoor = (r === DOOR_ROW && c === DOOR_COL);
+
+      if (isDoor) {
+        cell.classList.add('door');
+        if (doorOpen) {
+          cell.classList.add('door-open');
+          cell.textContent = '🚪';
+        } else {
+          cell.textContent = '🔒';
+        }
+      } else if (content === 'wall') {
+        cell.classList.add('wall');
+      } else if (content && content.char) {
+        const tile = document.createElement('div');
+        tile.className = 'letter-tile';
+        tile.textContent = content.char;
+        cell.appendChild(tile);
+      }
+      if (r === player.row && c === player.col && !isDoor) {
+        const charDiv = document.createElement('div');
+        charDiv.className = 'character';
+        charDiv.textContent = '🧑';
+        cell.appendChild(charDiv);
+      }
+      boardEl.appendChild(cell);
+    }
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  MOVEMENT: PUSH ALWAYS, PULL IF TOGGLED
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function movePlayer(dRow, dCol) {
+  if (isAnimating || levelComplete) return;
+  const newRow = player.row + dRow;
+  const newCol = player.col + dCol;
+  if (newRow < 0 || newRow >= ROWS || newCol < 0 || newCol >= COLS) return;
+
+  const targetCell = grid[newRow][newCol];
+  const isDoorCell = (newRow === DOOR_ROW && newCol === DOOR_COL);
+
+  if (doorOpen && isDoorCell) {
+    completeLevel();
+    return;
+  }
+  if (isDoorCell && !doorOpen) return;
+  if (targetCell === 'wall') return;
+
+  // ─── PUSH (always available) ───
+  // If there's a letter in front, try to push it
+  if (targetCell && targetCell.char) {
+    const pushRow = newRow + dRow;
+    const pushCol = newCol + dCol;
+    if (pushRow < 0 || pushRow >= ROWS || pushCol < 0 || pushCol >= COLS) return;
+    const pushCell = grid[pushRow][pushCol];
+    if (pushCell === null && !(pushRow === DOOR_ROW && pushCol === DOOR_COL && !doorOpen)) {
+      grid[pushRow][pushCol] = targetCell;
+      grid[newRow][newCol] = null;
+      player.row = newRow;
+      player.col = newCol;
+      renderBoard();
+      clearFeedback();
+      checkWin();
+      return;
+    }
+    return; // can't push
+  }
+
+  // ─── EMPTY CELL ───
+  if (targetCell === null) {
+    // If pull mode is ON, try to pull from behind
+    if (pullMode) {
+      const behindRow = player.row - dRow;
+      const behindCol = player.col - dCol;
+      if (behindRow >= 0 && behindRow < ROWS && behindCol >= 0 && behindCol < COLS) {
+        const behindCell = grid[behindRow][behindCol];
+        if (behindCell && behindCell.char) {
+          // Pull the letter into the player's old position
+          grid[player.row][player.col] = behindCell;
+          grid[behindRow][behindCol] = null;
+          player.row = newRow;
+          player.col = newCol;
+          renderBoard();
+          clearFeedback();
+          checkWin();
+          return;
+        }
+      }
+    }
+    // Just move
+    player.row = newRow;
+    player.col = newCol;
+    renderBoard();
+    clearFeedback();
+    return;
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  WIN CHECK
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function checkWin() {
+  if (doorOpen) return;
+  const len = word.length;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c <= COLS - len; c++) {
+      let match = true;
+      for (let i = 0; i < len; i++) {
+        const cell = grid[r][c + i];
+        if (!cell || !cell.char || cell.char !== word[i]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        doorOpen = true;
+        renderBoard();
+        setFeedback('🎉 Word formed! Door opened! Step on the door to advance.', 'win');
+        fireConfetti(80);
+        return;
+      }
+    }
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  LEVEL COMPLETE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function completeLevel() {
+  if (levelComplete) return;
+  levelComplete = true;
+  isAnimating = true;
+  score += 10;
+  updateUI();
+  setFeedback('🚀 Level complete! +10 points!', 'win');
+  fireConfetti(150);
+  setTimeout(() => {
+    isAnimating = false;
+    if (currentLevel + 1 < LEVELS.length) {
+      currentLevel++;
+      buildLevel(LEVELS[currentLevel]);
+    } else {
+      setFeedback('🏆 You finished all levels! You are a champion! 🏆', 'win');
+      fireConfetti(250);
+      levelComplete = true;
+    }
+  }, 1200);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  RESET & HINT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function resetLevel() {
+  if (isAnimating) return;
+  buildLevel(LEVELS[currentLevel]);
+  setFeedback('Level reset', 'info');
+}
+
+function giveHint() {
+  if (isAnimating || levelComplete) return;
+  if (hintCount <= 0) {
+    setFeedback('No hints left!', 'info');
+    return;
+  }
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const cell = grid[r][c];
+      if (cell && cell.char && word.includes(cell.char)) {
+        const cellEl = boardEl.querySelector(`[data-row="${r}"][data-col="${c}"] .letter-tile`);
+        if (cellEl) {
+          cellEl.classList.add('highlight');
+          setTimeout(() => cellEl.classList.remove('highlight'), 1600);
+          hintCount--;
+          hintBtn.textContent = '💡 Hint (' + hintCount + ')';
+          if (hintCount === 0) hintBtn.disabled = true;
+          setFeedback(`💡 Use ${pullMode ? 'pull' : 'push'} to move this letter into position.`, 'info');
+          return;
+        }
+      }
+    }
+  }
+  setFeedback('No hint available', 'info');
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  EVENT BINDING
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+document.addEventListener('keydown', (e) => {
+  const key = e.key;
+  // Spacebar toggles pull mode
+  if (key === ' ') {
+    e.preventDefault();
+    togglePull();
+    return;
+  }
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','W','a','A','s','S','d','D','r','R','h','H'].includes(key)) {
+    e.preventDefault();
+  }
+  if (key === 'ArrowUp' || key === 'w' || key === 'W') movePlayer(-1, 0);
+  else if (key === 'ArrowDown' || key === 's' || key === 'S') movePlayer(1, 0);
+  else if (key === 'ArrowLeft' || key === 'a' || key === 'A') movePlayer(0, -1);
+  else if (key === 'ArrowRight' || key === 'd' || key === 'D') movePlayer(0, 1);
+  else if (key === 'r' || key === 'R') resetLevel();
+  else if (key === 'h' || key === 'H') giveHint();
+});
+
+upBtn.addEventListener('click', () => movePlayer(-1, 0));
+downBtn.addEventListener('click', () => movePlayer(1, 0));
+leftBtn.addEventListener('click', () => movePlayer(0, -1));
+rightBtn.addEventListener('click', () => movePlayer(0, 1));
+resetBtn.addEventListener('click', resetLevel);
+hintBtn.addEventListener('click', giveHint);
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  START
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+buildLevel(LEVELS[0]);
+console.log('🚀 Push & Pull – Push always on. Spacebar toggles Pull.');
+</script>
+</body>
+</html>
