@@ -1,0 +1,1535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>AR Message Capsule</title>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js">
+    </script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #0a0a0f;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #container canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        /* Video background */
+        #video-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 0;
+            transform: scaleX(-1);
+            /* mirror selfie view */
+        }
+
+        /* UI Overlay */
+        #ui-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        #ui-overlay>* {
+            pointer-events: auto;
+        }
+
+        /* Top bar */
+        .top-bar {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .top-bar .title {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .top-bar .title .badge {
+            font-size: 10px;
+            background: rgba(255, 107, 107, 0.3);
+            padding: 2px 8px;
+            border-radius: 10px;
+            color: #ff6b6b;
+        }
+
+        .top-bar .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            background: rgba(255, 255, 255, 0.12);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            transform: scale(1.04);
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        .btn-primary {
+            background: rgba(107, 157, 255, 0.35);
+            border-color: rgba(107, 157, 255, 0.4);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: rgba(107, 157, 255, 0.5);
+        }
+
+        .btn-success {
+            background: rgba(81, 207, 102, 0.3);
+            border-color: rgba(81, 207, 102, 0.35);
+            color: #fff;
+        }
+
+        .btn-success:hover {
+            background: rgba(81, 207, 102, 0.45);
+        }
+
+        .btn-danger {
+            background: rgba(255, 107, 107, 0.25);
+            border-color: rgba(255, 107, 107, 0.3);
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background: rgba(255, 107, 107, 0.4);
+        }
+
+        /* Bottom hint */
+        .bottom-hint {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 13px;
+            letter-spacing: 0.3px;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 8px 20px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            white-space: nowrap;
+            animation: pulseHint 2.5s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        .bottom-hint .icon {
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        @keyframes pulseHint {
+            0%,
+            100% {
+                opacity: 0.5;
+                transform: translateX(-50%) scale(1);
+            }
+            50% {
+                opacity: 1;
+                transform: translateX(-50%) scale(1.03);
+            }
+        }
+
+        /* Object count badge */
+        .object-count {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 4px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+        }
+
+        /* Share modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            z-index: 100;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease;
+            pointer-events: auto;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .modal-box {
+            background: rgba(20, 22, 36, 0.92);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 32px 28px;
+            max-width: 420px;
+            width: 92%;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+            pointer-events: auto;
+        }
+
+        .modal-box h2 {
+            color: #fff;
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.3px;
+        }
+
+        .modal-box p {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .share-url-container {
+            display: flex;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 14px;
+            padding: 4px 4px 4px 16px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            margin-bottom: 16px;
+            align-items: center;
+        }
+
+        .share-url-container input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 13px;
+            padding: 10px 0;
+            outline: none;
+            font-family: 'SF Mono', monospace;
+            min-width: 0;
+        }
+
+        .share-url-container input::selection {
+            background: rgba(107, 157, 255, 0.3);
+        }
+
+        .share-url-container .copy-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 12px;
+            background: rgba(107, 157, 255, 0.25);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            border: 1px solid rgba(107, 157, 255, 0.15);
+        }
+
+        .share-url-container .copy-btn:hover {
+            background: rgba(107, 157, 255, 0.4);
+        }
+
+        .share-url-container .copy-btn.copied {
+            background: rgba(81, 207, 102, 0.3);
+            border-color: rgba(81, 207, 102, 0.2);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .modal-actions .btn {
+            flex: 1;
+            justify-content: center;
+            padding: 12px;
+            font-size: 14px;
+        }
+
+        .modal-actions .btn-close {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.06);
+        }
+
+        .modal-actions .btn-close:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        /* Status toast */
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 10px 24px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #fff;
+            font-size: 14px;
+            z-index: 200;
+            opacity: 0;
+            transition: all 0.4s ease;
+            pointer-events: none;
+            text-align: center;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .top-bar .title {
+                font-size: 13px;
+                padding: 6px 12px;
+            }
+            .btn {
+                font-size: 11px;
+                padding: 6px 12px;
+            }
+            .modal-box {
+                padding: 24px 18px;
+            }
+            .modal-box h2 {
+                font-size: 19px;
+            }
+            .bottom-hint {
+                font-size: 11px;
+                padding: 6px 14px;
+                bottom: 28px;
+            }
+        }
+
+        /* Loading state */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0a0a0f;
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+            transition: opacity 0.8s ease;
+        }
+
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-spinner {
+            width: 44px;
+            height: 44px;
+            border: 3px solid rgba(255, 255, 255, 0.08);
+            border-top-color: #6b9dff;
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* permission fallback */
+        .permission-fallback {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0a0a0f;
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .permission-fallback.active {
+            display: flex;
+        }
+
+        .permission-fallback h2 {
+            font-size: 22px;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        .permission-fallback p {
+            font-size: 15px;
+            color: rgba(255, 255, 255, 0.5);
+            max-width: 360px;
+            line-height: 1.6;
+        }
+
+        .permission-fallback .btn {
+            margin-top: 24px;
+            padding: 12px 32px;
+            font-size: 16px;
+        }
+
+        /* Three.js canvas container */
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        #three-container canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+            pointer-events: none;
+        }
+
+        /* Color picker for object */
+        .color-options {
+            display: flex;
+            gap: 8px;
+            margin: 12px 0 16px;
+            flex-wrap: wrap;
+        }
+
+        .color-options .color-dot {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .color-options .color-dot:hover {
+            transform: scale(1.12);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        .color-options .color-dot.active {
+            border-color: #fff;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
+            transform: scale(1.1);
+        }
+
+        .emoji-options {
+            display: flex;
+            gap: 10px;
+            margin: 8px 0 16px;
+            flex-wrap: wrap;
+        }
+
+        .emoji-options .emoji-btn {
+            font-size: 28px;
+            padding: 6px 12px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.06);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            line-height: 1;
+        }
+
+        .emoji-options .emoji-btn:hover {
+            transform: scale(1.15);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .emoji-options .emoji-btn.active {
+            border-color: rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .modal-label {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-top: 4px;
+            margin-bottom: 6px;
+        }
+
+        /* Delete button on placed objects - shown in UI */
+        .delete-object-btn {
+            position: absolute;
+            bottom: 160px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            pointer-events: auto;
+            display: none;
+        }
+
+        .delete-object-btn.show {
+            display: flex;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Loading -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <span>Starting AR Camera…</span>
+    </div>
+
+    <!-- Permission Fallback -->
+    <div class="permission-fallback" id="permissionFallback">
+        <div style="font-size:64px;margin-bottom:16px;">📷</div>
+        <h2>Camera Access Required</h2>
+        <p>This app uses your camera to create an AR experience. Please allow camera access when prompted.</p>
+        <button class="btn btn-primary" id="retryPermissionBtn">Try Again</button>
+    </div>
+
+    <!-- Video Background -->
+    <video id="video-bg" autoplay playsinline muted></video>
+
+    <!-- Three.js Container -->
+    <div id="three-container"></div>
+
+    <!-- UI Overlay -->
+    <div id="ui-overlay">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div class="title">
+                ✦ AR Capsule
+                <span class="badge">live</span>
+            </div>
+            <div class="actions">
+                <button class="btn btn-success" id="placeBtn" title="Place an object (tap anywhere)">
+                    <span>✦</span> Place
+                </button>
+                <button class="btn btn-primary" id="shareBtn" title="Share this AR scene">
+                    <span>↗</span> Share
+                </button>
+                <button class="btn btn-danger" id="clearBtn" title="Clear all objects">
+                    <span>✕</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Object Count -->
+        <div class="object-count" id="objectCount">0 objects</div>
+
+        <!-- Bottom Hint -->
+        <div class="bottom-hint" id="bottomHint">
+            <span class="icon">👆</span> Tap anywhere to place a 3D object
+        </div>
+    </div>
+
+    <!-- Share Modal -->
+    <div class="modal-overlay" id="shareModal">
+        <div class="modal-box">
+            <h2>✨ Share AR Capsule</h2>
+            <p>Send this link to a friend. They'll see your AR objects in their own camera view!</p>
+
+            <div class="modal-label">Object style</div>
+            <div class="emoji-options" id="emojiOptions">
+                <button class="emoji-btn active" data-emoji="❤️">❤️</button>
+                <button class="emoji-btn" data-emoji="⭐">⭐</button>
+                <button class="emoji-btn" data-emoji="🌈">🌈</button>
+                <button class="emoji-btn" data-emoji="🎯">🎯</button>
+                <button class="emoji-btn" data-emoji="💎">💎</button>
+                <button class="emoji-btn" data-emoji="🔥">🔥</button>
+            </div>
+
+            <div class="modal-label">Color</div>
+            <div class="color-options" id="colorOptions">
+                <span class="color-dot active" style="background:#ff6b6b;" data-color="#ff6b6b"></span>
+                <span class="color-dot" style="background:#4ecdc4;" data-color="#4ecdc4"></span>
+                <span class="color-dot" style="background:#ffd93d;" data-color="#ffd93d"></span>
+                <span class="color-dot" style="background:#a29bfe;" data-color="#a29bfe"></span>
+                <span class="color-dot" style="background:#fd79a8;" data-color="#fd79a8"></span>
+                <span class="color-dot" style="background:#00b894;" data-color="#00b894"></span>
+                <span class="color-dot" style="background:#fdcb6e;" data-color="#fdcb6e"></span>
+                <span class="color-dot" style="background:#e17055;" data-color="#e17055"></span>
+            </div>
+
+            <div class="share-url-container">
+                <input type="text" id="shareUrlInput" readonly value="Loading…" />
+                <button class="copy-btn" id="copyShareBtn">Copy</button>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-close" id="closeModalBtn">Close</button>
+                <button class="btn btn-primary" id="shareNativeBtn">📤 Share</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ============================================================
+        //  AR MESSAGE CAPSULE — Single-file AR sharing
+        //  Uses Three.js + Camera + Device Orientation
+        // ============================================================
+
+        (() => {
+            'use strict';
+
+            // -------- DOM refs --------
+            const video = document.getElementById('video-bg');
+            const container = document.getElementById('three-container');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const permissionFallback = document.getElementById('permissionFallback');
+            const placeBtn = document.getElementById('placeBtn');
+            const shareBtn = document.getElementById('shareBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            const objectCountEl = document.getElementById('objectCount');
+            const bottomHint = document.getElementById('bottomHint');
+            const shareModal = document.getElementById('shareModal');
+            const shareUrlInput = document.getElementById('shareUrlInput');
+            const copyShareBtn = document.getElementById('copyShareBtn');
+            const closeModalBtn = document.getElementById('closeModalBtn');
+            const shareNativeBtn = document.getElementById('shareNativeBtn');
+            const retryPermissionBtn = document.getElementById('retryPermissionBtn');
+            const toast = document.getElementById('toast');
+            const emojiBtns = document.querySelectorAll('.emoji-btn');
+            const colorDots = document.querySelectorAll('.color-dot');
+
+            // -------- State --------
+            let scene, camera, renderer;
+            let objects = []; // { mesh, position, color, emoji, id }
+            let objectIdCounter = 0;
+            let isReady = false;
+            let isPlacing = false;
+            let selectedEmoji = '❤️';
+            let selectedColor = '#ff6b6b';
+            let deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
+            let isOrientationSupported = false;
+            let videoTexture = null;
+            let bgPlane = null;
+            let clock = new THREE.Clock();
+
+            // Camera params
+            const PLACE_DISTANCE = 2.2;
+            const CAMERA_FOV = 60;
+
+            // Share data
+            let shareData = null;
+
+            // -------- Toast helper --------
+            let toastTimeout;
+
+            function showToast(msg, duration = 2200) {
+                toast.textContent = msg;
+                toast.classList.add('show');
+                clearTimeout(toastTimeout);
+                toastTimeout = setTimeout(() => toast.classList.remove('show'), duration);
+            }
+
+            // -------- Camera setup --------
+            async function initCamera() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                        },
+                        audio: false,
+                    });
+                    video.srcObject = stream;
+                    await video.play();
+
+                    // Wait for video to be ready
+                    return new Promise((resolve) => {
+                        const checkReady = () => {
+                            if (video.readyState >= 2 && video.videoWidth > 0) {
+                                resolve(stream);
+                            } else {
+                                requestAnimationFrame(checkReady);
+                            }
+                        };
+                        checkReady();
+                    });
+                } catch (err) {
+                    console.warn('Camera error:', err);
+                    // Try with 'user' facing mode as fallback
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({
+                            video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+                            audio: false,
+                        });
+                        video.srcObject = stream;
+                        await video.play();
+                        return new Promise((resolve) => {
+                            const checkReady = () => {
+                                if (video.readyState >= 2 && video.videoWidth > 0) {
+                                    resolve(stream);
+                                } else {
+                                    requestAnimationFrame(checkReady);
+                                }
+                            };
+                            checkReady();
+                        });
+                    } catch (err2) {
+                        throw new Error('Camera access denied');
+                    }
+                }
+            }
+
+            // -------- Device Orientation --------
+            function initOrientation() {
+                if (window.DeviceOrientationEvent) {
+                    // Check if permission is needed (iOS 13+)
+                    if (typeof DeviceOrientationEvent !== 'undefined' &&
+                        typeof DeviceOrientationEvent.requestPermission === 'function') {
+                        DeviceOrientationEvent.requestPermission()
+                            .then((state) => {
+                                if (state === 'granted') {
+                                    window.addEventListener('deviceorientation', onOrientation);
+                                    isOrientationSupported = true;
+                                } else {
+                                    console.warn('Orientation permission denied');
+                                    useFallbackControls();
+                                }
+                            })
+                            .catch(() => useFallbackControls());
+                    } else {
+                        window.addEventListener('deviceorientation', onOrientation);
+                        isOrientationSupported = true;
+                        // Check if we actually get data
+                        setTimeout(() => {
+                            if (deviceOrientation.alpha === 0 && deviceOrientation.beta === 0) {
+                                // No orientation data, use fallback
+                                useFallbackControls();
+                            }
+                        }, 1000);
+                    }
+                } else {
+                    useFallbackControls();
+                }
+            }
+
+            function onOrientation(e) {
+                deviceOrientation.alpha = e.alpha || 0;
+                deviceOrientation.beta = e.beta || 0;
+                deviceOrientation.gamma = e.gamma || 0;
+                if (!isOrientationSupported) isOrientationSupported = true;
+            }
+
+            function useFallbackControls() {
+                isOrientationSupported = false;
+                showToast('Using mouse/touch controls (no device orientation)', 3000);
+                // We'll add mouse controls in the render loop
+            }
+
+            // -------- Three.js Scene --------
+            function initThree() {
+                scene = new THREE.Scene();
+
+                // Camera
+                const aspect = window.innerWidth / window.innerHeight;
+                camera = new THREE.PerspectiveCamera(CAMERA_FOV, aspect, 0.1, 100);
+                camera.position.set(0, 0, 0);
+
+                // Renderer
+                renderer = new THREE.WebGLRenderer({
+                    alpha: true,
+                    antialias: true,
+                });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                renderer.setClearColor(0x000000, 0);
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                container.appendChild(renderer.domElement);
+
+                // Background plane with video texture
+                const geometry = new THREE.PlaneGeometry(20, 20);
+                const material = new THREE.MeshBasicMaterial({
+                    color: 0x000000,
+                    transparent: true,
+                    opacity: 0,
+                    side: THREE.DoubleSide,
+                    depthWrite: false,
+                });
+                bgPlane = new THREE.Mesh(geometry, material);
+                bgPlane.position.z = -5;
+                scene.add(bgPlane);
+
+                // Lights
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                scene.add(ambientLight);
+
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+                dirLight.position.set(5, 10, 7);
+                dirLight.castShadow = true;
+                scene.add(dirLight);
+
+                const fillLight = new THREE.DirectionalLight(0x4488ff, 0.3);
+                fillLight.position.set(-5, 0, 5);
+                scene.add(fillLight);
+
+                // Handle resize
+                window.addEventListener('resize', onResize);
+
+                // Mouse/touch controls for fallback
+                setupFallbackControls();
+            }
+
+            function setupFallbackControls() {
+                let isDragging = false;
+                let prevX = 0,
+                    prevY = 0;
+                let rotX = 0,
+                    rotY = 0;
+
+                const onPointerDown = (e) => {
+                    isDragging = true;
+                    const p = getPointerPos(e);
+                    prevX = p.x;
+                    prevY = p.y;
+                };
+
+                const onPointerMove = (e) => {
+                    if (!isDragging) return;
+                    const p = getPointerPos(e);
+                    const dx = p.x - prevX;
+                    const dy = p.y - prevY;
+                    rotX += dx * 0.005;
+                    rotY += dy * 0.005;
+                    rotY = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, rotY));
+                    prevX = p.x;
+                    prevY = p.y;
+                };
+
+                const onPointerUp = () => { isDragging = false; };
+
+                const getPointerPos = (e) => {
+                    if (e.touches) {
+                        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    }
+                    return { x: e.clientX, y: e.clientY };
+                };
+
+                // Only add if orientation is not supported
+                const checkOrientation = () => {
+                    if (!isOrientationSupported) {
+                        document.addEventListener('mousedown', onPointerDown);
+                        document.addEventListener('mousemove', onPointerMove);
+                        document.addEventListener('mouseup', onPointerUp);
+                        document.addEventListener('touchstart', onPointerDown, { passive: true });
+                        document.addEventListener('touchmove', onPointerMove, { passive: true });
+                        document.addEventListener('touchend', onPointerUp, { passive: true });
+                        // Store for use in render loop
+                        window._fallbackRot = { x: rotX, y: rotY };
+                        // Update in animation loop
+                        setInterval(() => {
+                            window._fallbackRot.x = rotX;
+                            window._fallbackRot.y = rotY;
+                        }, 16);
+                    }
+                };
+
+                // Check after a short delay to see if orientation data arrives
+                setTimeout(checkOrientation, 1500);
+                // Also check immediately
+                if (!isOrientationSupported) checkOrientation();
+            }
+
+            function onResize() {
+                const w = window.innerWidth;
+                const h = window.innerHeight;
+                camera.aspect = w / h;
+                camera.updateProjectionMatrix();
+                renderer.setSize(w, h);
+            }
+
+            // -------- Video texture update --------
+            function updateVideoTexture() {
+                if (!videoTexture) {
+                    videoTexture = new THREE.VideoTexture(video);
+                    videoTexture.minFilter = THREE.LinearFilter;
+                    videoTexture.magFilter = THREE.LinearFilter;
+                    videoTexture.format = THREE.RGBAFormat;
+                    videoTexture.needsUpdate = true;
+                    if (bgPlane) {
+                        bgPlane.material.map = videoTexture;
+                        bgPlane.material.opacity = 1;
+                        bgPlane.material.color.set(0xffffff);
+                        bgPlane.material.needsUpdate = true;
+                    }
+                } else {
+                    videoTexture.needsUpdate = true;
+                }
+            }
+
+            // -------- Create a 3D object (heart / star / etc) --------
+            function createARObject(emoji, colorHex, position) {
+                const group = new THREE.Group();
+
+                // Main shape
+                let shapeGeom;
+                const size = 0.35;
+
+                // Create a 3D shape based on emoji
+                // For simplicity, we use a sphere with a "gem" like faceted look, or a heart shape
+                // We'll use a custom geometry for heart, or a beautiful gem-like shape
+                if (emoji === '❤️') {
+                    // Heart shape using extruded heart
+                    const heartShape = new THREE.Shape();
+                    const x = 0,
+                        y = 0;
+                    heartShape.moveTo(x + 0.25, y + 0.25);
+                    heartShape.bezierCurveTo(x + 0.25, y + 0.25, x + 0.2, y, x, y);
+                    heartShape.bezierCurveTo(x - 0.3, y, x - 0.3, y + 0.35, x - 0.3, y + 0.35);
+                    heartShape.bezierCurveTo(x - 0.3, y + 0.55, x - 0.1, y + 0.7, x + 0.25, y + 0.95);
+                    heartShape.bezierCurveTo(x + 0.6, y + 0.7, x + 0.8, y + 0.55, x + 0.8, y + 0.35);
+                    heartShape.bezierCurveTo(x + 0.8, y + 0.35, x + 0.8, y, x + 0.5, y);
+                    heartShape.bezierCurveTo(x + 0.35, y, x + 0.25, y + 0.25, x + 0.25, y + 0.25);
+
+                    const extrudeSettings = {
+                        steps: 1,
+                        depth: 0.2,
+                        bevelEnabled: true,
+                        bevelThickness: 0.05,
+                        bevelSize: 0.04,
+                        bevelSegments: 8,
+                    };
+                    shapeGeom = new THREE.ExtrudeGeometry(heartShape, extrudeSettings);
+                    shapeGeom.center();
+                    shapeGeom.scale(0.6, 0.6, 0.6);
+                } else if (emoji === '⭐') {
+                    // Star
+                    const starShape = new THREE.Shape();
+                    const outerR = 0.5,
+                        innerR = 0.2,
+                        spikes = 5;
+                    let rot = -Math.PI / 2;
+                    const step = Math.PI / spikes;
+                    starShape.moveTo(0, -outerR);
+                    for (let i = 0; i < spikes * 2; i++) {
+                        const r = i % 2 === 0 ? outerR : innerR;
+                        const angle = rot + i * step;
+                        starShape.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+                    }
+                    starShape.closePath();
+                    const extrudeSettings2 = {
+                        steps: 1,
+                        depth: 0.15,
+                        bevelEnabled: true,
+                        bevelThickness: 0.04,
+                        bevelSize: 0.03,
+                        bevelSegments: 6,
+                    };
+                    shapeGeom = new THREE.ExtrudeGeometry(starShape, extrudeSettings2);
+                    shapeGeom.center();
+                    shapeGeom.scale(0.7, 0.7, 0.7);
+                } else {
+                    // Default: a beautiful octahedron / gem
+                    shapeGeom = new THREE.OctahedronGeometry(0.4);
+                }
+
+                const material = new THREE.MeshPhysicalMaterial({
+                    color: colorHex,
+                    metalness: 0.3,
+                    roughness: 0.15,
+                    clearcoat: 0.4,
+                    clearcoatRoughness: 0.2,
+                    emissive: colorHex,
+                    emissiveIntensity: 0.08,
+                    transparent: true,
+                    opacity: 0.95,
+                    envMapIntensity: 0.6,
+                });
+
+                const mesh = new THREE.Mesh(shapeGeom, material);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                group.add(mesh);
+
+                // Glow ring
+                const ringGeom = new THREE.RingGeometry(0.45, 0.55, 32);
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: colorHex,
+                    transparent: true,
+                    opacity: 0.2,
+                    side: THREE.DoubleSide,
+                    depthWrite: false,
+                });
+                const ring = new THREE.Mesh(ringGeom, ringMat);
+                ring.rotation.x = -Math.PI / 2;
+                ring.position.y = -0.3;
+                group.add(ring);
+
+                // Small orbiting particles
+                const particleCount = 12;
+                const particleGeom = new THREE.BufferGeometry();
+                const positions = new Float32Array(particleCount * 3);
+                for (let i = 0; i < particleCount; i++) {
+                    const angle = (i / particleCount) * Math.PI * 2;
+                    const radius = 0.6 + Math.random() * 0.15;
+                    positions[i * 3] = Math.cos(angle) * radius;
+                    positions[i * 3 + 1] = Math.sin(angle) * radius * 0.3 + 0.1;
+                    positions[i * 3 + 2] = Math.sin(angle) * radius * 0.4;
+                }
+                particleGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                const particleMat = new THREE.PointsMaterial({
+                    color: colorHex,
+                    size: 0.035,
+                    transparent: true,
+                    opacity: 0.5,
+                    blending: THREE.AdditiveBlending,
+                });
+                const particles = new THREE.Points(particleGeom, particleMat);
+                group.add(particles);
+
+                // Set position
+                group.position.copy(position);
+
+                // Store data
+                group.userData = {
+                    isARObject: true,
+                    id: objectIdCounter++,
+                    emoji: emoji,
+                    color: colorHex,
+                    createdAt: Date.now(),
+                    particles: particles,
+                    ring: ring,
+                    mesh: mesh,
+                    floatOffset: Math.random() * Math.PI * 2,
+                };
+
+                // Add to scene
+                scene.add(group);
+
+                // Add to objects array
+                objects.push(group);
+
+                updateUI();
+
+                return group;
+            }
+
+            // -------- Place object at camera center --------
+            function placeObject() {
+                if (!isReady) {
+                    showToast('Waiting for camera…', 1500);
+                    return;
+                }
+
+                // Get direction from camera
+                const dir = new THREE.Vector3(0, 0, -1);
+                dir.applyQuaternion(camera.quaternion);
+                dir.normalize();
+
+                const pos = new THREE.Vector3().copy(camera.position).add(dir.multiplyScalar(PLACE_DISTANCE));
+
+                // Slight random offset for organic feel
+                pos.x += (Math.random() - 0.5) * 0.12;
+                pos.y += (Math.random() - 0.5) * 0.12;
+                pos.z += (Math.random() - 0.5) * 0.12;
+
+                const obj = createARObject(selectedEmoji, selectedColor, pos);
+
+                // Pop animation
+                obj.scale.set(0.01, 0.01, 0.01);
+                const targetScale = 1;
+                const startTime = Date.now();
+                const duration = 500;
+
+                function popAnim() {
+                    const elapsed = Date.now() - startTime;
+                    const t = Math.min(elapsed / duration, 1);
+                    const ease = 1 - Math.pow(1 - t, 3) * Math.cos(t * Math.PI * 0.3);
+                    const s = 0.01 + (targetScale - 0.01) * ease;
+                    obj.scale.set(s, s, s);
+                    if (t < 1) requestAnimationFrame(popAnim);
+                }
+                popAnim();
+
+                showToast(`✨ Placed ${selectedEmoji}`, 1200);
+
+                // Auto-hide hint after first placement
+                if (objects.length === 1) {
+                    bottomHint.textContent = '👆 Keep tapping to add more objects';
+                }
+            }
+
+            // -------- Clear all objects --------
+            function clearAllObjects() {
+                if (objects.length === 0) {
+                    showToast('No objects to clear', 1000);
+                    return;
+                }
+                objects.forEach(obj => {
+                    scene.remove(obj);
+                    // Dispose geometries and materials
+                    obj.traverse((child) => {
+                        if (child.isMesh) {
+                            child.geometry?.dispose();
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach(m => m.dispose());
+                            } else {
+                                child.material?.dispose();
+                            }
+                        }
+                    });
+                });
+                objects = [];
+                updateUI();
+                showToast('🧹 Cleared all objects', 1200);
+                bottomHint.textContent = '👆 Tap anywhere to place a 3D object';
+            }
+
+            // -------- Update UI --------
+            function updateUI() {
+                const count = objects.length;
+                objectCountEl.textContent = count === 0 ? '0 objects' :
+                    count === 1 ? '1 object' : `${count} objects`;
+                objectCountEl.style.opacity = count > 0 ? '1' : '0.3';
+            }
+
+            // -------- Generate Share Link --------
+            function generateShareData() {
+                if (objects.length === 0) {
+                    showToast('Place at least one object first!', 1800);
+                    return null;
+                }
+
+                // Serialize objects
+                const data = objects.map(obj => {
+                    const pos = obj.position;
+                    return {
+                        emoji: obj.userData.emoji,
+                        color: obj.userData.color,
+                        x: pos.x,
+                        y: pos.y,
+                        z: pos.z,
+                    };
+                });
+
+                // Encode to base64
+                const json = JSON.stringify(data);
+                const encoded = btoa(encodeURIComponent(json));
+                return encoded;
+            }
+
+            function buildShareLink() {
+                const data = generateShareData();
+                if (!data) return null;
+                // Use current URL with query param
+                const url = new URL(window.location.href);
+                url.searchParams.set('ar', data);
+                url.searchParams.set('v', '2');
+                return url.toString();
+            }
+
+            function openShareModal() {
+                const link = buildShareLink();
+                if (!link) return;
+                shareUrlInput.value = link;
+                shareData = link;
+                shareModal.classList.add('active');
+
+                // Reset copy button
+                copyShareBtn.textContent = 'Copy';
+                copyShareBtn.classList.remove('copied');
+            }
+
+            // -------- Load shared AR data from URL --------
+            function loadSharedData() {
+                const params = new URLSearchParams(window.location.search);
+                const encoded = params.get('ar');
+                if (!encoded) return false;
+
+                try {
+                    const json = decodeURIComponent(atob(encoded));
+                    const data = JSON.parse(json);
+                    if (!Array.isArray(data) || data.length === 0) return false;
+
+                    // Wait for ready, then place objects
+                    const tryPlace = () => {
+                        if (isReady) {
+                            data.forEach(item => {
+                                const pos = new THREE.Vector3(item.x, item.y, item.z);
+                                const obj = createARObject(item.emoji || '❤️', item.color || '#ff6b6b', pos);
+                                // Scale animation
+                                obj.scale.set(0.01, 0.01, 0.01);
+                                const target = 1;
+                                const start = Date.now();
+                                const dur = 400;
+                                (function anim() {
+                                    const t = Math.min((Date.now() - start) / dur, 1);
+                                    const ease = 1 - Math.pow(1 - t, 3);
+                                    const s = 0.01 + (target - 0.01) * ease;
+                                    obj.scale.set(s, s, s);
+                                    if (t < 1) requestAnimationFrame(anim);
+                                })();
+                            });
+                            showToast(`🎯 Loaded ${data.length} shared object${data.length > 1 ? 's' : ''}`, 2000);
+                            bottomHint.textContent = '👆 Tap to add your own objects too';
+                            return true;
+                        } else {
+                            // Wait a bit longer
+                            setTimeout(tryPlace, 300);
+                        }
+                    };
+                    tryPlace();
+                    return true;
+                } catch (e) {
+                    console.warn('Failed to load shared data:', e);
+                    return false;
+                }
+            }
+
+            // -------- Render Loop --------
+            function animate() {
+                requestAnimationFrame(animate);
+
+                const time = clock.getElapsedTime();
+
+                // Update video texture
+                if (video.readyState >= 2) {
+                    updateVideoTexture();
+                }
+
+                // Update camera with device orientation
+                if (isOrientationSupported) {
+                    // Use device orientation
+                    const alpha = THREE.MathUtils.degToRad(deviceOrientation.alpha || 0);
+                    const beta = THREE.MathUtils.degToRad(deviceOrientation.beta || 0);
+                    const gamma = THREE.MathUtils.degToRad(deviceOrientation.gamma || 0);
+
+                    // Android / iOS compatible
+                    const euler = new THREE.Euler(beta, alpha, -gamma, 'YXZ');
+                    camera.quaternion.setFromEuler(euler);
+                } else if (window._fallbackRot) {
+                    // Fallback mouse/touch controls
+                    const rot = window._fallbackRot;
+                    const euler = new THREE.Euler(rot.y, rot.x, 0, 'YXZ');
+                    camera.quaternion.setFromEuler(euler);
+                }
+
+                // Animate objects
+                objects.forEach((obj, index) => {
+                    const floatOffset = obj.userData.floatOffset || 0;
+                    const baseY = obj.position.y;
+                    // Floating motion
+                    const floatY = Math.sin(time * 0.6 + floatOffset) * 0.06;
+                    obj.position.y = baseY + floatY;
+
+                    // Gentle rotation
+                    obj.rotation.y += 0.003;
+                    obj.rotation.x = Math.sin(time * 0.2 + floatOffset) * 0.03;
+
+                    // Rotate particles
+                    if (obj.userData.particles) {
+                        obj.userData.particles.rotation.y += 0.01;
+                        obj.userData.particles.rotation.x = Math.sin(time * 0.3 + floatOffset) * 0.05;
+                    }
+
+                    // Pulse ring
+                    if (obj.userData.ring) {
+                        const pulse = 0.7 + Math.sin(time * 1.2 + floatOffset) * 0.3;
+                        obj.userData.ring.material.opacity = 0.08 + Math.sin(time * 0.8 + floatOffset) * 0.06;
+                        const s = 0.9 + Math.sin(time * 0.9 + floatOffset) * 0.1;
+                        obj.userData.ring.scale.set(s, s, s);
+                    }
+
+                    // Mesh slight pulse
+                    if (obj.userData.mesh) {
+                        const s = 1 + Math.sin(time * 1.1 + floatOffset) * 0.015;
+                        obj.userData.mesh.scale.set(s, s, s);
+                    }
+                });
+
+                renderer.render(scene, camera);
+            }
+
+            // -------- Init --------
+            async function init() {
+                try {
+                    // Try to get camera
+                    await initCamera();
+                    permissionFallback.classList.remove('active');
+                } catch (err) {
+                    permissionFallback.classList.add('active');
+                    loadingOverlay.classList.add('hidden');
+                    return;
+                }
+
+                // Init Three.js
+                initThree();
+
+                // Init orientation
+                initOrientation();
+
+                // Start render loop
+                animate();
+
+                // Mark as ready
+                isReady = true;
+                loadingOverlay.classList.add('hidden');
+
+                // Check for shared data in URL
+                const hasShared = loadSharedData();
+
+                if (hasShared) {
+                    showToast('🎯 Shared AR content loaded!', 2000);
+                } else {
+                    showToast('📱 AR ready — tap to place objects', 1800);
+                }
+
+                // UI events
+                setupUIEvents();
+            }
+
+            // -------- UI Events --------
+            function setupUIEvents() {
+                // Place button
+                placeBtn.addEventListener('click', placeObject);
+
+                // Tap on screen to place
+                document.addEventListener('click', (e) => {
+                    // Ignore if click is on UI elements
+                    if (e.target.closest('.top-bar') || e.target.closest('.modal-overlay') ||
+                        e.target.closest('#ui-overlay') && !e.target.closest('.bottom-hint')) {
+                        return;
+                    }
+                    placeObject();
+                });
+
+                document.addEventListener('touchstart', (e) => {
+                    if (e.target.closest('.top-bar') || e.target.closest('.modal-overlay') ||
+                        e.target.closest('#ui-overlay') && !e.target.closest('.bottom-hint')) {
+                        return;
+                    }
+                    // Only place on tap, not on drag
+                    const touch = e.touches[0];
+                    if (touch) {
+                        // Use a simple tap detection
+                        placeObject();
+                    }
+                }, { passive: true });
+
+                // Share button
+                shareBtn.addEventListener('click', openShareModal);
+
+                // Clear button
+                clearBtn.addEventListener('click', clearAllObjects);
+
+                // Close modal
+                closeModalBtn.addEventListener('click', () => {
+                    shareModal.classList.remove('active');
+                });
+
+                // Click outside modal to close
+                shareModal.addEventListener('click', (e) => {
+                    if (e.target === shareModal) {
+                        shareModal.classList.remove('active');
+                    }
+                });
+
+                // Copy link
+                copyShareBtn.addEventListener('click', () => {
+                    if (!shareUrlInput.value) return;
+                    navigator.clipboard?.writeText(shareUrlInput.value)
+                        .then(() => {
+                            copyShareBtn.textContent = '✓ Copied!';
+                            copyShareBtn.classList.add('copied');
+                            showToast('📋 Link copied to clipboard', 1500);
+                            setTimeout(() => {
+                                copyShareBtn.textContent = 'Copy';
+                                copyShareBtn.classList.remove('copied');
+                            }, 2000);
+                        })
+                        .catch(() => {
+                            // Fallback: select and copy
+                            shareUrlInput.select();
+                            document.execCommand('copy');
+                            showToast('📋 Link copied!', 1500);
+                        });
+                });
+
+                // Native share
+                shareNativeBtn.addEventListener('click', () => {
+                    if (!shareUrlInput.value) return;
+                    if (navigator.share) {
+                        navigator.share({
+                            title: 'AR Message Capsule',
+                            text: 'Check out this AR message I left for you! ✨',
+                            url: shareUrlInput.value,
+                        }).catch(() => {});
+                    } else {
+                        // Fallback: copy to clipboard
+                        navigator.clipboard?.writeText(shareUrlInput.value)
+                            .then(() => showToast('📋 Link copied!', 1500))
+                            .catch(() => {
+                                shareUrlInput.select();
+                                document.execCommand('copy');
+                                showToast('📋 Link copied!', 1500);
+                            });
+                    }
+                    shareModal.classList.remove('active');
+                });
+
+                // Emoji selection
+                emojiBtns.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        emojiBtns.forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        selectedEmoji = btn.dataset.emoji;
+                    });
+                });
+
+                // Color selection
+                colorDots.forEach(dot => {
+                    dot.addEventListener('click', () => {
+                        colorDots.forEach(d => d.classList.remove('active'));
+                        dot.classList.add('active');
+                        selectedColor = dot.dataset.color;
+                    });
+                });
+
+                // Retry permission
+                retryPermissionBtn.addEventListener('click', () => {
+                    permissionFallback.classList.remove('active');
+                    loadingOverlay.classList.remove('hidden');
+                    init();
+                });
+
+                // Keyboard shortcuts
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'p' || e.key === 'P') placeObject();
+                    if (e.key === 'c' || e.key === 'C') clearAllObjects();
+                    if (e.key === 's' || e.key === 'S') openShareModal();
+                    if (e.key === 'Escape') shareModal.classList.remove('active');
+                });
+            }
+
+            // -------- Start --------
+            // Show loading
+            loadingOverlay.classList.remove('hidden');
+
+            // Init after a small delay to let DOM settle
+            setTimeout(init, 300);
+
+        })();
+    </script>
+</body>
+</html>
