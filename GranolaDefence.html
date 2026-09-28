@@ -19,7 +19,7 @@
 </head>
 <body>
 <canvas id="game"></canvas>
-<div id="hint">P = pause | R = reload / respawn P1 | E = P1 eat | M = P2 eat / respawn | F or RMB = punch</div>
+<div id="hint">P = pause / field shop | R = reload / respawn P1 | E = P1 eat | M = P2 eat / respawn | F or RMB = punch</div>
 <script>
 "use strict";
 
@@ -37,6 +37,7 @@ var W = 1280, H = 720;
 var RESPAWN_COST       = 50;
 var STEAL_AMOUNT       = 10;
 var STEAL_AMOUNT_BRUTE = 20;
+var REPAIR_COST        = 200;
 
 var SEASON_CYCLE  = -1;
 var SEASON_RANDOM = -2;
@@ -46,27 +47,28 @@ var TOD_NIGHT  = 'night';
 var TOD_CHANGE = 'change';
 
 /* =========================================================
-   META PROGRESSION (persistent across runs)
+   META PROGRESSION
    ========================================================= */
 
+/* CHEAPER ARMORY PRICES */
 var GUNS = {
   pistol:  { id: 'pistol',  name: 'Pistol',  icon: '🔫', dmg: 1, cd: 0.11, pellets: 1, spread: 0.028, price: 0,   desc: 'Standard sidearm. Reliable.' },
-  smg:     { id: 'smg',     name: 'SMG',     icon: '💨', dmg: 1, cd: 0.06, pellets: 1, spread: 0.075, price: 60,  desc: 'Fires very fast with loose spread.' },
-  rifle:   { id: 'rifle',   name: 'Rifle',   icon: '🎯', dmg: 2, cd: 0.24, pellets: 1, spread: 0.006, price: 90,  desc: 'High damage, pinpoint accuracy, slow.' },
-  shotgun: { id: 'shotgun', name: 'Shotgun', icon: '💥', dmg: 1, cd: 0.45, pellets: 5, spread: 0.24,  price: 120, desc: '5 pellets per shot. Devastating up close.' }
+  smg:     { id: 'smg',     name: 'SMG',     icon: '💨', dmg: 1, cd: 0.06, pellets: 1, spread: 0.075, price: 30,  desc: 'Fires very fast with loose spread.' },
+  rifle:   { id: 'rifle',   name: 'Rifle',   icon: '🎯', dmg: 2, cd: 0.24, pellets: 1, spread: 0.006, price: 50,  desc: 'High damage, pinpoint accuracy, slow.' },
+  shotgun: { id: 'shotgun', name: 'Shotgun', icon: '💥', dmg: 1, cd: 0.45, pellets: 5, spread: 0.24,  price: 75,  desc: '5 pellets per shot. Devastating up close.' }
 };
 
 var META = {
   money: 0,
   gun: 'pistol',
   unlockedGuns: { pistol: true },
-  damageTier: 0,     /* 0-3, each +1 damage */
-  fireRateTier: 0    /* 0-3, each -8% cooldown */
+  damageTier: 0,
+  fireRateTier: 0
 };
 
-/* Tier costs */
-var DMG_TIER_COSTS = [40, 90, 180];
-var ROF_TIER_COSTS = [35, 80, 160];
+/* CHEAPER UPGRADE TIERS */
+var DMG_TIER_COSTS = [20, 45, 90];
+var ROF_TIER_COSTS = [18, 40, 85];
 var DMG_PER_TIER   = 1;
 var ROF_PER_TIER   = 0.08;
 
@@ -88,11 +90,8 @@ function loadMeta() {
     }
   } catch (e) {}
 }
-
 function saveMeta() {
-  try {
-    localStorage.setItem('granolaMeta_v1', JSON.stringify(META));
-  } catch (e) {}
+  try { localStorage.setItem('granolaMeta_v1', JSON.stringify(META)); } catch (e) {}
 }
 
 /* ---------- helpers ---------- */
@@ -102,16 +101,13 @@ function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
 function dist(x1, y1, x2, y2) { return Math.hypot(x2 - x1, y2 - y1); }
 var TAU = Math.PI * 2;
 
-/* Distance from point to line segment */
 function distToSegment(px, py, x1, y1, x2, y2) {
   var dx = x2 - x1, dy = y2 - y1;
   var lenSq = dx * dx + dy * dy;
   if (lenSq === 0) return Math.hypot(px - x1, py - y1);
   var t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
   t = Math.max(0, Math.min(1, t));
-  var projX = x1 + t * dx;
-  var projY = y1 + t * dy;
-  return Math.hypot(px - projX, py - projY);
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
 }
 
 function roundRect(c, x, y, w, h, r) {
@@ -146,9 +142,7 @@ function unlockAudio() {
 
 function playBeep(freqStart, freqEnd, duration, volume, type) {
   if (!audioCtx) return;
-  if (audioCtx.state === 'suspended') {
-    try { audioCtx.resume(); } catch (e) {}
-  }
+  if (audioCtx.state === 'suspended') { try { audioCtx.resume(); } catch (e) {} }
   try {
     var t = audioCtx.currentTime;
     var osc = audioCtx.createOscillator();
@@ -169,41 +163,46 @@ function playHurtSound() {
   playBeep(280, 70, 0.22, 0.20, 'sawtooth');
   playBeep(120, 55, 0.28, 0.14, 'square');
 }
-
 function playPlayerDownSound() {
   playBeep(400, 40, 0.6, 0.25, 'sawtooth');
   playBeep(200, 30, 0.7, 0.18, 'square');
 }
-
 function playBuySound() {
   playBeep(500, 800, 0.12, 0.15, 'sine');
   playBeep(800, 1200, 0.15, 0.12, 'sine');
 }
+function playWaveSound() {
+  playBeep(400, 600, 0.15, 0.12, 'sine');
+  playBeep(600, 900, 0.18, 0.10, 'sine');
+}
+function playMagnetSound() {
+  playBeep(200, 1400, 0.4, 0.20, 'sine');
+  playBeep(100, 800, 0.5, 0.15, 'triangle');
+}
 
 /* =========================================================
-   SEASONS
+   SEASONS  —  NEW ORDER: Spring, Summer, Autumn, Winter
    ========================================================= */
 
-var SEASONS = ['Summer', 'Winter', 'Autumn', 'Spring'];
+var SEASONS = ['Spring', 'Summer', 'Autumn', 'Winter'];
 
 var SEASON_INFO = [
+  { name: 'Spring', icon: '🍃', color: '#7ee081',
+    playerPerk: 'Leaf Shield: falling leaves stun robbers 2.5s',
+    robberPerk: 'Spring Bloom: each wave spawns +3 extra robbers' },
   { name: 'Summer', icon: '☀', color: '#f0c040',
     playerPerk: 'None — normal conditions',
     robberPerk: 'None — standard raiders' },
-  { name: 'Winter', icon: '❄', color: '#8fd4ff',
-    playerPerk: 'Bright Night: +30% flashlight, brighter map',
-    robberPerk: 'Frozen Fury: robbers get +2 HP' },
   { name: 'Autumn', icon: '🍂', color: '#d9803a',
     playerPerk: 'Harvest Bounty: granola drops give +60%',
     robberPerk: 'Night Ambush: 85% of robbers hide in the dark' },
-  { name: 'Spring', icon: '🍃', color: '#7ee081',
-    playerPerk: 'Leaf Shield: falling leaves stun robbers 2.5s',
-    robberPerk: 'Spring Bloom: each wave spawns +3 extra robbers' }
+  { name: 'Winter', icon: '❄', color: '#8fd4ff',
+    playerPerk: 'Bright Night: +30% flashlight, brighter map',
+    robberPerk: 'Frozen Fury: robbers get +2 HP' }
 ];
 
 function seasonVisionMult() {
   if (G.timeOfDay === TOD_DAY) return 1.00;
-  if (G.season === 'Summer') return 1.00;
   if (G.season === 'Winter') return 1.30;
   if (G.season === 'Autumn') return 0.55;
   return 1.00;
@@ -215,23 +214,10 @@ function seasonDarkness() {
   if (G.season === 'Spring') return 0.88;
   return 0.90;
 }
-function seasonRobberSpeedMult() {
-  if (G.season === 'Autumn') return 1.05;
-  return 1.00;
-}
-function seasonPlayerSpeedMult() {
-  if (G.season === 'Autumn') return 0.95;
-  return 1.00;
-}
-function robberMaxHp() {
-  var hp = 5 + (G.level - 1);
-  if (G.season === 'Winter') hp += 2;
-  return hp;
-}
-function bruteSpawnChance() {
-  if (G.level < 3) return 0;
-  return Math.min(0.30, 0.05 + (G.level - 2) * 0.04);
-}
+function seasonRobberSpeedMult() { if (G.season === 'Autumn') return 1.05; return 1.00; }
+function seasonPlayerSpeedMult() { if (G.season === 'Autumn') return 0.95; return 1.00; }
+function robberMaxHp() { var hp = 5 + (G.level - 1); if (G.season === 'Winter') hp += 2; return hp; }
+function bruteSpawnChance() { if (G.level < 3) return 0; return Math.min(0.30, 0.05 + (G.level - 2) * 0.04); }
 
 /* =========================================================
    STATE
@@ -246,7 +232,7 @@ var G = {
   level: 1,
   wave: 0,
   wavesPerLevel: 3,
-  season: 'Summer',
+  season: 'Spring',
   timeOfDay: TOD_NIGHT,
   time: 0,
   gameOverReason: 'stolen',
@@ -278,15 +264,20 @@ var G = {
   shopChoices: [],
   shopPicked: null,
   purchaseCounts: {},
-  placeAnchor: null,     /* for two-click barricade placement */
+  placeAnchor: null,
 
   spawnLeft: 0,
   spawnTimer: 0,
   waveDelay: 0,
   bruteAnnounced: false,
 
+  /* Wave bonus banner */
+  waveBanner: '',
+  waveBannerT: 0,
+  waveBannerMax: 2.5,
+
   shake: 0,
-  stats: { killed: 0, stolen: 0, escaped: 0 },
+  stats: { killed: 0, stolen: 0, escaped: 0, magnetsUsed: 0 },
 
   damageFlash: 0,
   damageVignette: 0,
@@ -335,11 +326,7 @@ addEventListener('keydown', function (e) {
     if (k === 'a') { G.state = 'armory'; }
     return;
   }
-
-  if (G.state === 'armory') {
-    if (k === 'escape') { G.state = 'menu'; }
-    return;
-  }
+  if (G.state === 'armory') { if (k === 'escape') { G.state = 'menu'; } return; }
 
   if (G.state === 'season') {
     if (k === '1') G.seasonChoice = 0;
@@ -388,8 +375,8 @@ addEventListener('keydown', function (e) {
     return;
   }
 
-  if (k === 'p') togglePause();
-  if (k === 'escape' && G.state === 'play') togglePause();
+  if (k === 'p' || (k === 'escape' && G.state === 'play')) { togglePause(); return; }
+  if (k === 'escape' && G.state === 'paused') { G.state = 'play'; return; }
   if (G.state !== 'play') return;
 
   var p1 = G.players[0];
@@ -430,12 +417,7 @@ canvas.addEventListener('mousedown', function (e) {
     if (pointInRect(p, r.armory)) { G.state = 'armory'; return; }
     return;
   }
-
-  if (G.state === 'armory') {
-    if (e.button !== 0) return;
-    handleArmoryClick(p);
-    return;
-  }
+  if (G.state === 'armory') { if (e.button === 0) handleArmoryClick(p); return; }
 
   if (G.state === 'season') {
     if (e.button !== 0) return;
@@ -468,11 +450,8 @@ canvas.addEventListener('mousedown', function (e) {
 
   if (G.state === 'place') {
     if (e.button === 2) {
-      if (G.placeAnchor) {
-        G.placeAnchor = null;   /* cancel anchor first */
-      } else {
-        G.state = 'shop'; G.shopPicked = null;
-      }
+      if (G.placeAnchor) G.placeAnchor = null;
+      else { G.state = 'shop'; G.shopPicked = null; }
       return;
     }
     if (e.button === 0) {
@@ -500,6 +479,12 @@ canvas.addEventListener('mousedown', function (e) {
     var rgo = getGameOverRegions();
     if (pointInRect(p, rgo.menu))   { G.state = 'menu'; return; }
     if (pointInRect(p, rgo.armory)) { G.state = 'armory'; return; }
+    return;
+  }
+
+  if (G.state === 'paused') {
+    if (e.button !== 0) return;
+    handlePauseClick(p);
     return;
   }
 
@@ -570,7 +555,7 @@ function startGame(mode) {
   G.turretRangeBonus = 0;
   G.playerDmgBonus = 0;
   G.playerFireRateMult = 1;
-  G.stats = { killed: 0, stolen: 0, escaped: 0 };
+  G.stats = { killed: 0, stolen: 0, escaped: 0, magnetsUsed: 0 };
   G.gameOverReason = 'stolen';
   G.gameOverPlayerId = -1;
   G.earnedMoney = 0;
@@ -579,7 +564,6 @@ function startGame(mode) {
   G.placeAnchor = null;
   G.purchaseCounts = {};
   G.lastRandomSeason = -1;
-
   G.damageFlash = 0;
   G.damageVignette = 0;
   G.hitStop = 0;
@@ -587,13 +571,13 @@ function startGame(mode) {
   G.lastHurtPlayerId = -1;
   G.heartFlash = 0;
   G.lowHealthPulse = 0;
+  G.waveBanner = '';
+  G.waveBannerT = 0;
 
   G.bank = {
     x: W / 2, y: H / 2, w: 132, h: 92,
     maxHp: 30, hp: 30, regen: 1.5,
-    bonusHp: 0,
-    breached: false,
-    granola: 0, hitFlash: 0
+    bonusHp: 0, breached: false, granola: 0, hitFlash: 0
   };
 
   G.players = [ makePlayer(0, W / 2 - 130, H / 2 + 150) ];
@@ -610,9 +594,7 @@ function pickSeason() {
       var roll = randi(0, SEASONS.length - 2);
       if (roll >= G.lastRandomSeason) roll++;
       idx = roll;
-    } else {
-      idx = randi(0, SEASONS.length - 1);
-    }
+    } else idx = randi(0, SEASONS.length - 1);
     G.lastRandomSeason = idx;
     return SEASONS[idx];
   }
@@ -621,14 +603,14 @@ function pickSeason() {
   return SEASONS[0];
 }
 
+/* === Time of day — CYCLE now uses 4-level blocks to match the 4 seasons === */
 function pickTimeOfDay() {
   if (G.dayNightChoice === TOD_DAY)   return TOD_DAY;
   if (G.dayNightChoice === TOD_NIGHT) return TOD_NIGHT;
-
   if (G.seasonChoice === SEASON_RANDOM) return Math.random() < 0.5 ? TOD_DAY : TOD_NIGHT;
-
   if (G.seasonChoice === SEASON_CYCLE) {
-    var cycleIndex = Math.floor((G.level - 1) / 3);
+    /* 4 levels of one time-of-day, then 4 of the other — matches the 4-season cycle */
+    var cycleIndex = Math.floor((G.level - 1) / 4);
     return (cycleIndex % 2 === 0) ? TOD_NIGHT : TOD_DAY;
   }
   /* Fixed season → flip every level */
@@ -638,12 +620,10 @@ function pickTimeOfDay() {
 function startLevel() {
   G.season = pickSeason();
   G.timeOfDay = pickTimeOfDay();
-
   G.wave = 0;
   G.bank.maxHp = 30 + 5 * (G.level - 1) + (G.bank.bonusHp || 0);
   G.bank.hp = G.bank.maxHp;
   G.bank.breached = false;
-
   G.robbers.length = 0;
   G.bullets.length = 0;
   G.pickups.length = 0;
@@ -653,7 +633,6 @@ function startLevel() {
   G.damageNumbers.length = 0;
   G.damageFlash = 0;
   G.damageVignette = 0;
-
   for (var i = 0; i < G.players.length; i++) {
     var p = G.players[i];
     p.x = G.bank.x + (p.id === 0 ? -130 : 130);
@@ -665,7 +644,6 @@ function startLevel() {
     p.invuln = 1.5;
     p.hurtFlash = 0;
   }
-
   makeDecor();
   startWave();
 }
@@ -680,7 +658,101 @@ function startWave() {
   G.waveDelay = 0;
 }
 
+/* === WAVE BONUS === */
+function applyWaveBonus() {
+  var roll = randi(0, 2);
+  if (roll === 0) {
+    /* Ammo refill */
+    for (var i = 0; i < G.players.length; i++) {
+      if (G.players[i].down) continue;
+      G.players[i].reserve = Math.min(60, G.players[i].reserve + 8);
+      G.players[i].clip = G.players[i].clipSize;
+      G.players[i].reloadT = 0;
+    }
+    showWaveBanner('⚡ WAVE BONUS: +8 AMMO & FULL CLIP');
+  } else if (roll === 1) {
+    /* Small heal */
+    var healed = false;
+    for (var j = 0; j < G.players.length; j++) {
+      if (G.players[j].down) continue;
+      if (G.players[j].hp < G.players[j].maxHp) {
+        G.players[j].hp++;
+        healed = true;
+        for (var k = 0; k < 12; k++) {
+          G.particles.push({
+            x: G.players[j].x, y: G.players[j].y,
+            vx: rand(-80, 80), vy: rand(-140, -30),
+            life: 0.8, max: 0.8, color: '#7ee081', size: 3
+          });
+        }
+      }
+    }
+    if (healed) showWaveBanner('❤ WAVE BONUS: +1 HP');
+    else {
+      G.granola += 12;
+      showWaveBanner('🌾 WAVE BONUS: +12 GRANOLA');
+    }
+  } else {
+    /* Shared granola */
+    G.granola += 15;
+    showWaveBanner('🌾 WAVE BONUS: +15 GRANOLA');
+  }
+  playWaveSound();
+}
+
+function showWaveBanner(text) {
+  G.waveBanner = text;
+  G.waveBannerT = G.waveBannerMax;
+}
+
+/* === AUTO-COLLECT ALL PICKUPS === */
+function collectAllPickups(sourcePlayer) {
+  var p = sourcePlayer || G.players[0];
+  var collected = 0;
+  for (var i = G.pickups.length - 1; i >= 0; i--) {
+    var pk = G.pickups[i];
+    if (pk.type === 'granola') {
+      G.granola += (pk.amount || 5);
+      collected++;
+    } else if (pk.type === 'ammo') {
+      p.reserve = Math.min(60, p.reserve + (pk.amount || 10));
+      collected++;
+    } else if (pk.type === 'magnet') {
+      /* skip — no double magnets */
+      continue;
+    }
+    /* Trail particle effect flying to the player */
+    for (var k = 0; k < 4; k++) {
+      G.particles.push({
+        x: pk.x, y: pk.y,
+        vx: rand(-100, 100), vy: rand(-100, 100),
+        life: 0.5, max: 0.5,
+        color: pk.type === 'granola' ? '#c9a227' : '#ffd94a',
+        size: 3
+      });
+    }
+    G.pickups.splice(i, 1);
+  }
+  return collected;
+}
+
+/* === MAGNET USE === */
+function useMagnet(sourcePlayer) {
+  G.stats.magnetsUsed++;
+  playMagnetSound();
+  collectAllPickups(sourcePlayer);
+  /* Big visual flash */
+  if (sourcePlayer) {
+    G.flashes.push({ x: sourcePlayer.x, y: sourcePlayer.y, r: 500, life: 0.6, max: 0.6 });
+  } else if (G.bank) {
+    G.flashes.push({ x: G.bank.x, y: G.bank.y, r: 500, life: 0.6, max: 0.6 });
+  }
+  showWaveBanner('🧲 MAGNET! Collected everything');
+}
+
 function levelComplete() {
+  /* === Magnet used at level end — auto-collect all pickups === */
+  useMagnet(null);
   var reward = 15 + G.level * 5;
   G.granola += reward;
   rollShop();
@@ -702,35 +774,31 @@ function nextSeasonLabel() {
   if (G.seasonChoice >= 0)              return SEASONS[G.seasonChoice];
   return SEASONS[0];
 }
-
 function nextTimeOfDayLabel() {
   if (G.dayNightChoice === TOD_DAY)   return 'Day';
   if (G.dayNightChoice === TOD_NIGHT) return 'Night';
   if (G.seasonChoice === SEASON_RANDOM) return 'Random';
   var nextLevel = G.level + 1;
   if (G.seasonChoice === SEASON_CYCLE) {
-    var ci = Math.floor((nextLevel - 1) / 3);
+    var ci = Math.floor((nextLevel - 1) / 4);   /* 4-level blocks */
     return (ci % 2 === 0) ? 'Night' : 'Day';
   }
   return (nextLevel % 2 === 1) ? 'Night' : 'Day';
 }
-
 function seasonModeLabel() {
   if (G.seasonChoice === SEASON_RANDOM) return 'RANDOM';
   if (G.seasonChoice === SEASON_CYCLE)  return 'CYCLE';
   if (G.seasonChoice >= 0)              return SEASONS[G.seasonChoice].toUpperCase();
   return '?';
 }
-
 function todModeLabel() {
   if (G.dayNightChoice === TOD_DAY)   return 'DAY';
   if (G.dayNightChoice === TOD_NIGHT) return 'NIGHT';
   return 'CHANGE';
 }
-
 function changeSubtitle() {
   if (G.seasonChoice === SEASON_RANDOM) return 'Random each level';
-  if (G.seasonChoice === SEASON_CYCLE)  return 'Flips every 3 levels';
+  if (G.seasonChoice === SEASON_CYCLE)  return 'Flips every 4 seasons';
   return 'Flips every level';
 }
 
@@ -749,7 +817,6 @@ function tryRespawn(p) {
   if (!p || !p.down) return;
   if (G.state !== 'play') return;
   if (G.granola < RESPAWN_COST) return;
-
   G.granola -= RESPAWN_COST;
   p.down = false;
   p.hp = 3;
@@ -759,11 +826,7 @@ function tryRespawn(p) {
   p.clip = p.clipSize;
   p.reserve = 20;
   p.vx = 0; p.vy = 0;
-  p.reloadT = 0;
-  p.fireCd = 0;
-  p.punchCd = 0;
-  p.hurtFlash = 0;
-
+  p.reloadT = 0; p.fireCd = 0; p.punchCd = 0; p.hurtFlash = 0;
   for (var i = 0; i < 20; i++) {
     G.particles.push({
       x: p.x, y: p.y,
@@ -774,24 +837,17 @@ function tryRespawn(p) {
 }
 
 /* =========================================================
-   SHOP CATALOG  (cheaper base costs)
+   SHOP CATALOG
    ========================================================= */
 
 var BUILD_CATALOG = [
-  {
-    id: 'turret', name: 'Turret', icon: '🔫', cost: 15,
+  { id: 'turret', name: 'Turret', icon: '🔫', cost: 15,
     desc: 'A placed turret that auto-fires at robbers.',
-    placeable: true,
-    place: function (x, y) { addTurretAt(x, y); }
-  },
-  {
-    id: 'barricade', name: 'Barricade', icon: '🧱', cost: 7,
-    desc: 'Draw a line of sandbags. Robbers slow near it.',
-    placeable: true,
-    place: function (x1, y1, x2, y2) { addBarricadeAt(x1, y1, x2, y2); }
-  },
-  {
-    id: 'vault', name: 'Vault Reinforcement', icon: '🏦', cost: 28,
+    placeable: true, place: function (x, y) { addTurretAt(x, y); } },
+  { id: 'barricade', name: 'Barricade', icon: '🧱', cost: 7,
+    desc: 'Draw a thick line of sandbags. Robbers slow near it.',
+    placeable: true, place: function (x1, y1, x2, y2) { addBarricadeAt(x1, y1, x2, y2); } },
+  { id: 'vault', name: 'Vault Reinforcement', icon: '🏦', cost: 28,
     desc: '+10 bank max HP. Repairs a breach.',
     placeable: false,
     place: function () {
@@ -799,19 +855,15 @@ var BUILD_CATALOG = [
       G.bank.maxHp += 10;
       if (G.bank.breached) G.bank.breached = false;
       G.bank.hp = Math.min(G.bank.maxHp, G.bank.hp + 10);
-    }
-  },
-  {
-    id: 'turret_dmg', name: 'Turret Ammo+', icon: '💥', cost: 22,
+    } },
+  { id: 'turret_dmg', name: 'Turret Ammo+', icon: '💥', cost: 22,
     desc: 'All turrets deal +1 damage.',
     placeable: false,
     place: function () {
       G.turretDmgBonus++;
       for (var i = 0; i < G.turrets.length; i++) G.turrets[i].dmg++;
-    }
-  },
-  {
-    id: 'turret_speed', name: 'Turret Servo+', icon: '⚡', cost: 18,
+    } },
+  { id: 'turret_speed', name: 'Turret Servo+', icon: '⚡', cost: 18,
     desc: 'All turrets fire ~25% faster.',
     placeable: false,
     place: function () {
@@ -819,19 +871,15 @@ var BUILD_CATALOG = [
       for (var i = 0; i < G.turrets.length; i++) {
         G.turrets[i].fireRate = Math.max(0.18, G.turrets[i].fireRate * 0.75);
       }
-    }
-  },
-  {
-    id: 'turret_range', name: 'Long-Range Optics', icon: '🎯', cost: 18,
+    } },
+  { id: 'turret_range', name: 'Long-Range Optics', icon: '🎯', cost: 18,
     desc: 'All turrets gain +70 range.',
     placeable: false,
     place: function () {
       G.turretRangeBonus += 70;
       for (var i = 0; i < G.turrets.length; i++) G.turrets[i].range += 70;
-    }
-  },
-  {
-    id: 'clip', name: 'Extended Mag', icon: '📦', cost: 25,
+    } },
+  { id: 'clip', name: 'Extended Mag', icon: '📦', cost: 25,
     desc: '+5 clip size for all players, plus a small refill.',
     placeable: false,
     place: function () {
@@ -840,20 +888,13 @@ var BUILD_CATALOG = [
         p.clipSize += 5;
         p.clip = Math.min(p.clipSize, p.clip + 5);
       }
-    }
-  },
-  {
-    id: 'weapon_dmg', name: 'Weapon Damage+', icon: '🗡️', cost: 28,
+    } },
+  { id: 'weapon_dmg', name: 'Weapon Damage+', icon: '🗡️', cost: 28,
     desc: 'Player bullets deal +1 damage. Stacks.',
-    placeable: false,
-    place: function () { G.playerDmgBonus++; }
-  },
-  {
-    id: 'rapid_fire', name: 'Rapid Fire', icon: '🔥', cost: 22,
+    placeable: false, place: function () { G.playerDmgBonus++; } },
+  { id: 'rapid_fire', name: 'Rapid Fire', icon: '🔥', cost: 22,
     desc: 'All players fire ~20% faster. Stacks.',
-    placeable: false,
-    place: function () { G.playerFireRateMult *= 0.80; }
-  }
+    placeable: false, place: function () { G.playerFireRateMult *= 0.80; } }
 ];
 
 function getItemCost(item) {
@@ -877,10 +918,8 @@ function pickShopItem(item) {
   var cost = getItemCost(item);
   if (G.granola < cost) return;
   G.shopPicked = item;
-  if (item.placeable) {
-    G.state = 'place';
-    G.placeAnchor = null;
-  } else {
+  if (item.placeable) { G.state = 'place'; G.placeAnchor = null; }
+  else {
     G.granola -= cost;
     G.purchaseCounts[item.id] = (G.purchaseCounts[item.id] || 0) + 1;
     item.place();
@@ -916,16 +955,15 @@ function canPlaceAt(x, y) {
   if (x < 50 || x > W - 50 || y < 50 || y > H - 50) return false;
   if (G.bank) {
     var b = G.bank;
-    var hw = b.w / 2 + 30;
-    var hh = b.h / 2 + 30;
-    if (x > b.x - hw && x < b.x + hw && y > b.y - hh && y < b.y + hh) return false;
+    if (x > b.x - b.w / 2 - 30 && x < b.x + b.w / 2 + 30 &&
+        y > b.y - b.h / 2 - 30 && y < b.y + b.h / 2 + 30) return false;
   }
   var i;
   for (i = 0; i < G.turrets.length; i++) {
     if (dist(x, y, G.turrets[i].x, G.turrets[i].y) < 50) return false;
   }
   for (i = 0; i < G.barricades.length; i++) {
-    if (distToSegment(x, y, G.barricades[i].x1, G.barricades[i].y1, G.barricades[i].x2, G.barricades[i].y2) < 30) return false;
+    if (distToSegment(x, y, G.barricades[i].x1, G.barricades[i].y1, G.barricades[i].x2, G.barricades[i].y2) < 36) return false;
   }
   for (i = 0; i < G.players.length; i++) {
     if (dist(x, y, G.players[i].x, G.players[i].y) < 40) return false;
@@ -947,7 +985,6 @@ function canPlaceBarricadePoint(x, y) {
 }
 
 function canPlaceBarricadeLine(x1, y1, x2, y2) {
-  /* Sample along the segment */
   var steps = Math.max(4, Math.floor(dist(x1, y1, x2, y2) / 20));
   for (var s = 0; s <= steps; s++) {
     var t = s / steps;
@@ -963,7 +1000,7 @@ function canPlaceBarricadeLine(x1, y1, x2, y2) {
       if (dist(sx, sy, G.turrets[i].x, G.turrets[i].y) < 35) return false;
     }
     for (var j = 0; j < G.barricades.length; j++) {
-      if (distToSegment(sx, sy, G.barricades[j].x1, G.barricades[j].y1, G.barricades[j].x2, G.barricades[j].y2) < 25) return false;
+      if (distToSegment(sx, sy, G.barricades[j].x1, G.barricades[j].y1, G.barricades[j].x2, G.barricades[j].y2) < 36) return false;
     }
   }
   for (var p = 0; p < G.players.length; p++) {
@@ -974,9 +1011,7 @@ function canPlaceBarricadeLine(x1, y1, x2, y2) {
 
 function addTurretAt(x, y) {
   G.turrets.push({
-    x: x, y: y,
-    angle: -Math.PI / 2,
-    cool: 0,
+    x: x, y: y, angle: -Math.PI / 2, cool: 0,
     range: 300 + G.turretRangeBonus,
     fireRate: 1.0 * G.turretSpeedMult,
     dmg: 1 + G.turretDmgBonus,
@@ -984,8 +1019,98 @@ function addTurretAt(x, y) {
   });
 }
 
+/* THICKER BARRICADE (r 14 → 22) */
 function addBarricadeAt(x1, y1, x2, y2) {
-  G.barricades.push({ x1: x1, y1: y1, x2: x2, y2: y2, r: 14 });
+  G.barricades.push({ x1: x1, y1: y1, x2: x2, y2: y2, r: 22 });
+}
+
+/* =========================================================
+   FIELD SHOP (PAUSED)
+   ========================================================= */
+
+function getPauseShopItems() {
+  var items = [
+    { id: 'weapon_dmg', name: 'Weapon Damage+', icon: '🗡️', cost: 28,
+      desc: 'All player bullets deal +1 damage. Stacks.',
+      apply: function () { G.playerDmgBonus++; } },
+    { id: 'rapid_fire', name: 'Rapid Fire', icon: '🔥', cost: 22,
+      desc: 'All players fire ~20% faster. Stacks.',
+      apply: function () { G.playerFireRateMult *= 0.80; } },
+    { id: 'clip', name: 'Extended Mag', icon: '📦', cost: 25,
+      desc: '+5 clip size for all players, plus a small refill.',
+      apply: function () {
+        for (var i = 0; i < G.players.length; i++) {
+          var p = G.players[i];
+          p.clipSize += 5;
+          p.clip = Math.min(p.clipSize, p.clip + 5);
+        }
+      } }
+  ];
+  if (G.bank && G.bank.breached) {
+    items.push({
+      id: 'repair_breach', name: 'Repair Breach', icon: '🔧',
+      cost: REPAIR_COST / 2,
+      desc: 'Seal the broken vault. Bank HP restored to max.',
+      apply: function () {
+        G.bank.breached = false;
+        G.bank.hp = G.bank.maxHp;
+        for (var i = 0; i < 40; i++) {
+          G.particles.push({
+            x: G.bank.x + rand(-60, 60), y: G.bank.y + rand(-50, 50),
+            vx: rand(-120, 120), vy: rand(-200, -60),
+            life: 0.9, max: 0.9,
+            color: ['#7ee081', '#b9c3cf', '#ffe4a8'][randi(0, 2)], size: 4
+          });
+        }
+      }
+    });
+  }
+  return items;
+}
+
+function getPauseItemCost(item) {
+  if (!item) return 0;
+  var times = G.purchaseCounts[item.id] || 0;
+  return Math.round(item.cost * 2 * (1 + 0.5 * times));
+}
+
+function getPauseShopRegions() {
+  var items = getPauseShopItems();
+  var count = items.length;
+  var pw = Math.min(1100, W - 40);
+  var ph = Math.min(520, H - 40);
+  var px = W / 2 - pw / 2;
+  var py = H / 2 - ph / 2;
+  var gap = 16;
+  var pad = 40;
+  var availableW = pw - pad * 2;
+  var cardW = Math.min(230, (availableW - gap * (count - 1)) / count);
+  var cardH = 300;
+  var totalW = cardW * count + gap * (count - 1);
+  var startX = W / 2 - totalW / 2;
+  var cardY = py + 130;
+  var cards = [];
+  for (var i = 0; i < count; i++) {
+    cards.push({ x: startX + i * (cardW + gap), y: cardY, w: cardW, h: cardH, item: items[i] });
+  }
+  return { cards: cards, px: px, py: py, pw: pw, ph: ph };
+}
+
+function handlePauseClick(p) {
+  var r = getPauseShopRegions();
+  for (var i = 0; i < r.cards.length; i++) {
+    if (pointInRect(p, r.cards[i])) { buyPauseShopItem(r.cards[i].item); return; }
+  }
+}
+
+function buyPauseShopItem(item) {
+  if (!item) return;
+  var cost = getPauseItemCost(item);
+  if (G.granola < cost) return;
+  G.granola -= cost;
+  G.purchaseCounts[item.id] = (G.purchaseCounts[item.id] || 0) + 1;
+  item.apply();
+  playBuySound();
 }
 
 /* =========================================================
@@ -997,8 +1122,7 @@ function collideWithBank(p) {
   var b = G.bank;
   var hw = b.w / 2;
   var hh = b.h / 2;
-  var dx = p.x - b.x;
-  var dy = p.y - b.y;
+  var dx = p.x - b.x, dy = p.y - b.y;
   var cx = clamp(dx, -hw, hw);
   var cy = clamp(dy, -hh, hh);
   var ddx = dx - cx, ddy = dy - cy;
@@ -1034,22 +1158,18 @@ function eatGranola(p) {
     p.hp++;
     for (var i = 0; i < 10; i++) {
       G.particles.push({
-        x: p.x, y: p.y,
-        vx: rand(-60, 60), vy: rand(-90, -20),
+        x: p.x, y: p.y, vx: rand(-60, 60), vy: rand(-90, -20),
         life: 0.7, max: 0.7, color: '#7ee081', size: 3
       });
     }
   }
 }
 
-function currentGun() {
-  return GUNS[META.gun] || GUNS.pistol;
-}
+function currentGun() { return GUNS[META.gun] || GUNS.pistol; }
 
 function shoot(p) {
   if (p.fireCd > 0 || p.reloadT > 0 || p.down) return;
   if (p.clip <= 0) { tryReload(p); return; }
-
   var gun = currentGun();
   var baseDmg = gun.dmg + G.playerDmgBonus + metaDamageBonus();
   var baseCd = p.autoAim ? (gun.cd * 2.8) : gun.cd;
@@ -1072,10 +1192,8 @@ function shoot(p) {
       dmg: baseDmg, life: 1.0, team: 'player'
     });
   }
-
   G.flashes.push({ x: p.x + Math.cos(p.angle) * 22, y: p.y + Math.sin(p.angle) * 22, r: 150, life: 0.06, max: 0.06 });
   G.shake = Math.min(4, G.shake + (gun.pellets > 1 ? 2 : 0.9));
-
   for (var k = 0; k < 3; k++) {
     var pa = p.angle + rand(-0.2, 0.2);
     G.particles.push({
@@ -1090,13 +1208,11 @@ function punch(p) {
   if (!p || p.down || p.punchCd > 0) return;
   p.punchCd = 0.42;
   p.punchAnim = 1;
-  var range = 50;
-  var hitAny = false;
+  var range = 50, hitAny = false;
   var pdmg = 2 + G.playerDmgBonus + metaDamageBonus();
   for (var i = 0; i < G.robbers.length; i++) {
     var r = G.robbers[i];
-    var d = dist(p.x, p.y, r.x, r.y);
-    if (d < range + r.r) {
+    if (dist(p.x, p.y, r.x, r.y) < range + r.r) {
       var ang = Math.atan2(r.y - p.y, r.x - p.x);
       damageRobber(r, pdmg, ang, 330);
       hitAny = true;
@@ -1115,7 +1231,6 @@ function punch(p) {
 function hurtPlayer(p, dmg) {
   if (G.state !== 'play') return;
   if (p.down || p.invuln > 0) return;
-
   p.hp -= dmg;
   p.invuln = 0.7;
   p.hurtFlash = 0.35;
@@ -1126,17 +1241,13 @@ function hurtPlayer(p, dmg) {
   G.lastHurtPlayerId = p.id;
   G.heartFlash = 1.0;
   playHurtSound();
-
   G.damageNumbers.push({
     x: p.x + rand(-8, 8), y: p.y - 22,
     text: '-' + dmg, vy: -60, vx: rand(-40, 40),
-    life: 1.1, max: 1.1, size: 34,
-    color: '#ff3040', stroke: '#7a0000'
+    life: 1.1, max: 1.1, size: 34, color: '#ff3040', stroke: '#7a0000'
   });
-
   for (var i = 0; i < 22; i++) {
-    var a = rand(0, TAU);
-    var sp = rand(80, 320);
+    var a = rand(0, TAU), sp = rand(80, 320);
     G.particles.push({
       x: p.x, y: p.y,
       vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
@@ -1147,7 +1258,6 @@ function hurtPlayer(p, dmg) {
   }
   G.flashes.push({ x: p.x, y: p.y, r: 220, life: 0.22, max: 0.22 });
   G.flashes.push({ x: p.x, y: p.y, r: 320, life: 0.35, max: 0.35 });
-
   if (p.hp <= 0) {
     p.hp = 0;
     p.down = true;
@@ -1189,9 +1299,7 @@ function spawnRobber() {
 
   var isBrute = Math.random() < bruteSpawnChance();
   var alive = [];
-  for (var i = 0; i < G.players.length; i++) {
-    if (!G.players[i].down) alive.push(G.players[i]);
-  }
+  for (var i = 0; i < G.players.length; i++) if (!G.players[i].down) alive.push(G.players[i]);
   var pChance = G.bank && G.bank.breached ? 0.12 : 0.34;
   var wantsPlayer = !isBrute && alive.length > 0 && Math.random() < pChance;
   var hiddenChance = 0;
@@ -1213,8 +1321,7 @@ function spawnRobber() {
     stun: 0, hitFlash: 0,
     hidden: (G.season === 'Autumn' && G.timeOfDay === TOD_NIGHT) && Math.random() < hiddenChance,
     wob: rand(0, TAU),
-    fleeing: false,
-    stolenAmount: 0,
+    fleeing: false, stolenAmount: 0,
     fleeTargetX: 0, fleeTargetY: 0
   });
   if (isBrute) G.bruteAnnounced = true;
@@ -1244,9 +1351,8 @@ function killRobber(r) {
   var i = G.robbers.indexOf(r);
   if (i >= 0) G.robbers.splice(i, 1);
   G.stats.killed++;
-
-  var particleCount = r.type === 'brute' ? 32 : 16;
-  for (var k = 0; k < particleCount; k++) {
+  var pc = r.type === 'brute' ? 32 : 16;
+  for (var k = 0; k < pc; k++) {
     G.particles.push({
       x: r.x, y: r.y,
       vx: rand(-180, 180), vy: rand(-180, 180),
@@ -1255,17 +1361,12 @@ function killRobber(r) {
       size: rand(2, 5)
     });
   }
-
   if (r.stolenAmount > 0) {
-    G.pickups.push({
-      x: r.x, y: r.y, type: 'granola', amount: r.stolenAmount,
-      life: 30, bob: rand(0, TAU), vx: 0, vy: 0
-    });
+    G.pickups.push({ x: r.x, y: r.y, type: 'granola', amount: r.stolenAmount, life: 30, bob: rand(0, TAU), vx: 0, vy: 0 });
   }
-
   if (r.type === 'brute') {
-    var granAmt = G.season === 'Autumn' ? 16 : 10;
-    G.pickups.push({ x: r.x - 12, y: r.y, type: 'granola', amount: granAmt, life: 24, bob: rand(0, TAU), vx: rand(-50, -20), vy: rand(-40, 40) });
+    var gAmt = G.season === 'Autumn' ? 16 : 10;
+    G.pickups.push({ x: r.x - 12, y: r.y, type: 'granola', amount: gAmt, life: 24, bob: rand(0, TAU), vx: rand(-50, -20), vy: rand(-40, 40) });
     G.pickups.push({ x: r.x + 12, y: r.y, type: 'ammo', amount: 20, life: 24, bob: rand(0, TAU), vx: rand(20, 50), vy: rand(-40, 40) });
   } else {
     if (Math.random() < 0.25) {
@@ -1275,6 +1376,16 @@ function killRobber(r) {
       G.pickups.push({ x: r.x, y: r.y, type: 'ammo', amount: 10, life: 22, bob: rand(0, TAU), vx: rand(-40, 40), vy: rand(-40, 40) });
     }
   }
+
+  /* === SMALL CHANCE TO DROP A MAGNET === */
+  if (Math.random() < 0.06) {
+    G.pickups.push({
+      x: r.x + rand(-20, 20), y: r.y + rand(-20, 20),
+      type: 'magnet', amount: 1,
+      life: 28, bob: rand(0, TAU),
+      vx: rand(-30, 30), vy: rand(-30, 30)
+    });
+  }
 }
 
 /* =========================================================
@@ -1282,6 +1393,9 @@ function killRobber(r) {
    ========================================================= */
 
 function update(dt) {
+  /* Wave banner always ticks down, even during hit-stop */
+  if (G.waveBannerT > 0) G.waveBannerT -= dt;
+
   if (G.hitStop > 0) { G.hitStop -= dt; decayFeedback(dt); return; }
   if (G.state !== 'play') { decayFeedback(dt); return; }
 
@@ -1295,7 +1409,6 @@ function update(dt) {
   updateWaves(dt);
   updateDamageNumbers(dt);
 
-  /* Track peak granola for meta money calc */
   if (G.granola > G.peakGranola) G.peakGranola = G.granola;
 
   var b = G.bank;
@@ -1320,9 +1433,7 @@ function update(dt) {
         });
       }
     }
-  } else {
-    b.hp = 0;
-  }
+  } else b.hp = 0;
 
   var i;
   for (i = G.flashes.length - 1; i >= 0; i--) {
@@ -1333,9 +1444,7 @@ function update(dt) {
   decayFeedback(dt);
 
   if (G.state !== 'play') return;
-
   if (b.breached && G.granola <= 0) { gameOver('stolen'); return; }
-
   var allDown = true;
   for (i = 0; i < G.players.length; i++) {
     if (!G.players[i].down) { allDown = false; break; }
@@ -1428,16 +1537,13 @@ function updatePlayers(dt) {
 function updateRobbers(dt) {
   var b = G.bank;
   var spMult = seasonRobberSpeedMult();
-
   for (var i = G.robbers.length - 1; i >= 0; i--) {
     var r = G.robbers[i];
-
     if (r.fleeing) {
       if (r.hitFlash > 0) r.hitFlash -= dt;
       if (r.stun > 0) { r.stun -= dt; continue; }
       r.wob += dt * 14;
-      var fdx = r.fleeTargetX - r.x;
-      var fdy = r.fleeTargetY - r.y;
+      var fdx = r.fleeTargetX - r.x, fdy = r.fleeTargetY - r.y;
       var fd = Math.hypot(fdx, fdy) || 1;
       var fspeed = r.speed * 1.2 * spMult;
       r.x += (fdx / fd) * fspeed * dt;
@@ -1456,34 +1562,25 @@ function updateRobbers(dt) {
 
     var tx, ty, range;
     var tp = (r.target === 'player' && r.targetPlayer && !r.targetPlayer.down) ? r.targetPlayer : null;
-    if (tp) {
-      tx = tp.x; ty = tp.y; range = r.r + tp.r + 6;
-    } else {
-      r.target = 'bank'; tx = b.x; ty = b.y;
-      range = 74 + (r.type === 'brute' ? 8 : 0);
-    }
+    if (tp) { tx = tp.x; ty = tp.y; range = r.r + tp.r + 6; }
+    else { r.target = 'bank'; tx = b.x; ty = b.y; range = 74 + (r.type === 'brute' ? 8 : 0); }
     var dx = tx - r.x, dy = ty - r.y;
     var d = Math.hypot(dx, dy) || 1;
 
     if (d > range) {
       var sp = r.speed * spMult;
-      /* Line barricade slow */
       for (var bi = 0; bi < G.barricades.length; bi++) {
         var bc = G.barricades[bi];
         var bdist = distToSegment(r.x, r.y, bc.x1, bc.y1, bc.x2, bc.y2);
-        if (bdist < bc.r + r.r + 6) {
-          sp *= r.type === 'brute' ? 0.60 : 0.38;
-          break;
-        }
+        if (bdist < bc.r + r.r + 6) { sp *= r.type === 'brute' ? 0.60 : 0.38; break; }
       }
       r.x += (dx / d) * sp * dt;
       r.y += (dy / d) * sp * dt;
     } else {
       if (r.atkCd <= 0) {
         r.atkCd = r.type === 'brute' ? 0.7 : 0.5;
-        if (tp) {
-          hurtPlayer(tp, r.type === 'brute' ? 2 : 1);
-        } else if (b.breached) {
+        if (tp) hurtPlayer(tp, r.type === 'brute' ? 2 : 1);
+        else if (b.breached) {
           var stealWanted = r.type === 'brute' ? STEAL_AMOUNT_BRUTE : STEAL_AMOUNT;
           var actual = Math.min(G.granola, stealWanted);
           G.granola -= actual;
@@ -1523,7 +1620,6 @@ function updateRobbers(dt) {
     }
   }
 
-  /* Separation */
   for (var i2 = 0; i2 < G.robbers.length; i2++) {
     for (var j = i2 + 1; j < G.robbers.length; j++) {
       var a = G.robbers[i2], c = G.robbers[j];
@@ -1603,27 +1699,24 @@ function updatePickups(dt) {
     var pk = G.pickups[i];
     pk.life -= dt;
     pk.bob += dt * 4;
-    pk.x += pk.vx * dt;
-    pk.y += pk.vy * dt;
+    pk.x += pk.vx * dt; pk.y += pk.vy * dt;
     pk.vx *= Math.pow(0.02, dt);
     pk.vy *= Math.pow(0.02, dt);
     pk.x = clamp(pk.x, 14, W - 14);
     pk.y = clamp(pk.y, 14, H - 14);
-
     var taken = false;
     for (var j = 0; j < G.players.length; j++) {
       var p = G.players[j];
       if (p.down) continue;
       var d = dist(pk.x, pk.y, p.x, p.y);
-      if (d < 70) {
-        pk.x += (p.x - pk.x) * dt * 4;
-        pk.y += (p.y - pk.y) * dt * 4;
-      }
+      if (d < 70) { pk.x += (p.x - pk.x) * dt * 4; pk.y += (p.y - pk.y) * dt * 4; }
       if (d < 24) {
         if (pk.type === 'granola') {
           G.granola += (pk.amount || 5);
-        } else {
+        } else if (pk.type === 'ammo') {
           p.reserve = Math.min(60, p.reserve + (pk.amount || 10));
+        } else if (pk.type === 'magnet') {
+          useMagnet(p);
         }
         taken = true;
         for (var k = 0; k < 8; k++) {
@@ -1631,7 +1724,8 @@ function updatePickups(dt) {
             x: pk.x, y: pk.y,
             vx: rand(-90, 90), vy: rand(-90, 90),
             life: 0.4, max: 0.4,
-            color: pk.type === 'granola' ? '#c98b4b' : '#ffd94a', size: 3
+            color: pk.type === 'granola' ? '#c98b4b' : (pk.type === 'magnet' ? '#c084fc' : '#ffd94a'),
+            size: 3
           });
         }
         break;
@@ -1644,8 +1738,7 @@ function updatePickups(dt) {
 function updateParticles(dt) {
   for (var i = G.particles.length - 1; i >= 0; i--) {
     var p = G.particles[i];
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
     p.vx *= Math.pow(0.25, dt);
     p.vy *= Math.pow(0.25, dt);
     p.life -= dt;
@@ -1679,8 +1772,7 @@ function updateLeaves(dt) {
           lf.stun = true;
           for (var k = 0; k < 10; k++) {
             G.particles.push({
-              x: lf.x, y: lf.y,
-              vx: rand(-120, 120), vy: rand(-120, 120),
+              x: lf.x, y: lf.y, vx: rand(-120, 120), vy: rand(-120, 120),
               life: 0.6, max: 0.6, color: '#7ee081', size: 3
             });
           }
@@ -1702,6 +1794,7 @@ function updateLeaves(dt) {
   }
 }
 
+/* === WAVE FLOW — now applies a bonus between waves === */
 function updateWaves(dt) {
   if (G.spawnLeft > 0) {
     G.spawnTimer -= dt;
@@ -1713,8 +1806,12 @@ function updateWaves(dt) {
   } else if (G.robbers.length === 0) {
     G.waveDelay += dt;
     if (G.waveDelay > 2.2) {
-      if (G.wave < G.wavesPerLevel) startWave();
-      else levelComplete();
+      if (G.wave < G.wavesPerLevel) {
+        applyWaveBonus();
+        startWave();
+      } else {
+        levelComplete();
+      }
     }
   }
 }
@@ -1738,12 +1835,9 @@ function gameOver(reason, playerId) {
   G.gameOverReason = reason || 'stolen';
   G.gameOverPlayerId = (typeof playerId === 'number') ? playerId : -1;
   G.shake = 20;
-
-  /* === Meta money calculation === */
   G.earnedMoney = Math.floor(G.peakGranola / 20);
   META.money += G.earnedMoney;
   saveMeta();
-
   for (var i = 0; i < 90; i++) {
     G.particles.push({
       x: G.bank.x + rand(-70, 70), y: G.bank.y + rand(-50, 50),
@@ -1769,33 +1863,23 @@ function getArmoryRegions() {
   var ph = Math.min(620, H - 40);
   var px = W / 2 - pw / 2;
   var py = H / 2 - ph / 2;
-
-  /* Guns row: 4 cards */
   var gunW = Math.min(220, (pw - 100) / 4);
   var gunH = 180;
   var gunGap = 12;
   var totalGunW = gunW * 4 + gunGap * 3;
   var gunStartX = W / 2 - totalGunW / 2;
   var gunY = py + 130;
-
   var gunCards = [];
   var gunKeys = ['pistol', 'smg', 'rifle', 'shotgun'];
   for (var i = 0; i < gunKeys.length; i++) {
-    gunCards.push({
-      x: gunStartX + i * (gunW + gunGap),
-      y: gunY, w: gunW, h: gunH,
-      key: gunKeys[i]
-    });
+    gunCards.push({ x: gunStartX + i * (gunW + gunGap), y: gunY, w: gunW, h: gunH, key: gunKeys[i] });
   }
-
-  /* Upgrades row: 2 cards */
   var upW = Math.min(300, (pw - 80) / 2);
   var upH = 130;
   var upGap = 20;
   var totalUpW = upW * 2 + upGap;
   var upStartX = W / 2 - totalUpW / 2;
   var upY = gunY + gunH + 26;
-
   return {
     guns: gunCards,
     damage: { x: upStartX, y: upY, w: upW, h: upH },
@@ -1806,16 +1890,12 @@ function getArmoryRegions() {
 
 function handleArmoryClick(p) {
   var r = getArmoryRegions();
-  /* Guns */
   for (var i = 0; i < r.guns.length; i++) {
     if (pointInRect(p, r.guns[i])) {
       var g = GUNS[r.guns[i].key];
       var unlocked = !!META.unlockedGuns[g.id];
-      if (unlocked) {
-        META.gun = g.id;
-        saveMeta();
-        playBuySound();
-      } else if (META.money >= g.price) {
+      if (unlocked) { META.gun = g.id; saveMeta(); playBuySound(); }
+      else if (META.money >= g.price) {
         META.money -= g.price;
         META.unlockedGuns[g.id] = true;
         META.gun = g.id;
@@ -1825,35 +1905,22 @@ function handleArmoryClick(p) {
       return;
     }
   }
-  /* Damage tier */
   if (pointInRect(p, r.damage)) {
     var dTier = META.damageTier;
     if (dTier < 3) {
       var dCost = DMG_TIER_COSTS[dTier];
-      if (META.money >= dCost) {
-        META.money -= dCost;
-        META.damageTier++;
-        saveMeta();
-        playBuySound();
-      }
+      if (META.money >= dCost) { META.money -= dCost; META.damageTier++; saveMeta(); playBuySound(); }
     }
     return;
   }
-  /* Fire rate tier */
   if (pointInRect(p, r.firerate)) {
     var rTier = META.fireRateTier;
     if (rTier < 3) {
       var rCost = ROF_TIER_COSTS[rTier];
-      if (META.money >= rCost) {
-        META.money -= rCost;
-        META.fireRateTier++;
-        saveMeta();
-        playBuySound();
-      }
+      if (META.money >= rCost) { META.money -= rCost; META.fireRateTier++; saveMeta(); playBuySound(); }
     }
     return;
   }
-  /* Back */
   if (pointInRect(p, r.back)) { G.state = 'menu'; return; }
 }
 
@@ -1861,7 +1928,6 @@ function drawArmory() {
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.85)';
   ctx.fillRect(0, 0, W, H);
-
   var pw = Math.min(1000, W - 40);
   var ph = Math.min(620, H - 40);
   var px = W / 2 - pw / 2;
@@ -1872,18 +1938,14 @@ function drawArmory() {
   ctx.font = 'bold 32px system-ui, sans-serif';
   ctx.fillStyle = '#e8c24a';
   ctx.fillText('⚙  ARMORY', W / 2, py + 50);
-
   ctx.font = '13px system-ui, sans-serif';
   ctx.fillStyle = '#8fa0b8';
   ctx.fillText('Spend permanent granola money on guns and upgrades. Persists between runs.', W / 2, py + 76);
-
   ctx.font = 'bold 22px system-ui, sans-serif';
   ctx.fillStyle = '#ffe066';
   ctx.fillText('💰 ' + META.money + ' granola money', W / 2, py + 108);
 
   var r = getArmoryRegions();
-
-  /* === GUNS === */
   for (var i = 0; i < r.guns.length; i++) {
     var card = r.guns[i];
     var g = GUNS[card.key];
@@ -1893,93 +1955,59 @@ function drawArmory() {
     var hovered = pointInRect(mouse, card);
 
     ctx.save();
-    if (equipped) {
-      ctx.shadowColor = '#7ee081';
-      ctx.shadowBlur = 15;
-    } else if (hovered && canBuy) {
-      ctx.shadowColor = '#ffe066';
-      ctx.shadowBlur = 10;
-    }
-    ctx.fillStyle = equipped ? 'rgba(24,48,32,0.98)'
-                   : (canBuy && hovered) ? 'rgba(40,36,20,0.98)'
-                   : unlocked ? 'rgba(20,28,38,0.95)'
-                   : 'rgba(14,18,24,0.9)';
-    roundRect(ctx, card.x, card.y, card.w, card.h, 12);
-    ctx.fill();
+    if (equipped) { ctx.shadowColor = '#7ee081'; ctx.shadowBlur = 15; }
+    else if (hovered && canBuy) { ctx.shadowColor = '#ffe066'; ctx.shadowBlur = 10; }
+    ctx.fillStyle = equipped ? 'rgba(24,48,32,0.98)' : (canBuy && hovered) ? 'rgba(40,36,20,0.98)' : unlocked ? 'rgba(20,28,38,0.95)' : 'rgba(14,18,24,0.9)';
+    roundRect(ctx, card.x, card.y, card.w, card.h, 12); ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = equipped ? '#7ee081'
-                    : (canBuy && hovered) ? '#ffe066'
-                    : unlocked ? 'rgba(140,180,220,0.6)'
-                    : 'rgba(110,130,160,0.3)';
+    ctx.strokeStyle = equipped ? '#7ee081' : (canBuy && hovered) ? '#ffe066' : unlocked ? 'rgba(140,180,220,0.6)' : 'rgba(110,130,160,0.3)';
     ctx.lineWidth = equipped ? 3 : (hovered && canBuy ? 2.5 : 1.5);
-    roundRect(ctx, card.x, card.y, card.w, card.h, 12);
-    ctx.stroke();
+    roundRect(ctx, card.x, card.y, card.w, card.h, 12); ctx.stroke();
     ctx.restore();
 
     ctx.textAlign = 'center';
     ctx.font = '40px system-ui, "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
     ctx.fillStyle = unlocked ? '#e8f0ff' : '#4a5568';
     ctx.fillText(g.icon, card.x + card.w / 2, card.y + 52);
-
     ctx.font = 'bold 16px system-ui, sans-serif';
     ctx.fillStyle = unlocked ? '#e8f0ff' : '#6b7a8a';
     ctx.fillText(g.name, card.x + card.w / 2, card.y + 80);
-
     ctx.font = '10.5px system-ui, sans-serif';
     ctx.fillStyle = unlocked ? '#9fb0c6' : '#5a6b80';
     wrapText(g.desc, card.x + card.w / 2, card.y + 98, card.w - 16, 12);
-
-    /* Stat line */
     ctx.font = '10px system-ui, sans-serif';
     ctx.fillStyle = '#7c8fa6';
     var dmgText = 'DMG ' + g.dmg + (g.pellets > 1 ? ' ×' + g.pellets : '');
     var cdText = 'RoF ' + (1 / g.cd).toFixed(1) + '/s';
     ctx.fillText(dmgText + '  ·  ' + cdText, card.x + card.w / 2, card.y + card.h - 42);
 
-    /* Button area at bottom */
     ctx.font = 'bold 12px system-ui, sans-serif';
-    if (equipped) {
-      ctx.fillStyle = '#7ee081';
-      ctx.fillText('EQUIPPED', card.x + card.w / 2, card.y + card.h - 16);
-    } else if (unlocked) {
-      ctx.fillStyle = '#5fd1ff';
-      ctx.fillText('CLICK TO EQUIP', card.x + card.w / 2, card.y + card.h - 16);
-    } else {
+    if (equipped) { ctx.fillStyle = '#7ee081'; ctx.fillText('EQUIPPED', card.x + card.w / 2, card.y + card.h - 16); }
+    else if (unlocked) { ctx.fillStyle = '#5fd1ff'; ctx.fillText('CLICK TO EQUIP', card.x + card.w / 2, card.y + card.h - 16); }
+    else {
       var canAfford = META.money >= g.price;
       ctx.fillStyle = canAfford ? '#ffe066' : '#7a5a1a';
       ctx.fillText('🔒 ' + g.price, card.x + card.w / 2, card.y + card.h - 16);
     }
   }
 
-  /* === DAMAGE UPGRADE === */
-  drawArmoryUpgradeCard(r.damage, '🗡️', 'Damage Boost',
-    '+' + DMG_PER_TIER + ' damage per tier',
-    META.damageTier, 3, DMG_TIER_COSTS);
+  drawArmoryUpgradeCard(r.damage, '🗡️', 'Damage Boost', '+' + DMG_PER_TIER + ' damage per tier', META.damageTier, 3, DMG_TIER_COSTS);
+  drawArmoryUpgradeCard(r.firerate, '🔥', 'Fire Rate', '-' + Math.round(ROF_PER_TIER * 100) + '% cooldown per tier', META.fireRateTier, 3, ROF_TIER_COSTS);
 
-  /* === FIRE RATE UPGRADE === */
-  drawArmoryUpgradeCard(r.firerate, '🔥', 'Fire Rate',
-    '-' + Math.round(ROF_PER_TIER * 100) + '% cooldown per tier',
-    META.fireRateTier, 3, ROF_TIER_COSTS);
-
-  /* === BACK === */
   var backHover = pointInRect(mouse, r.back);
   ctx.save();
   if (backHover) { ctx.shadowColor = '#8fa0b8'; ctx.shadowBlur = 10; }
   ctx.fillStyle = backHover ? 'rgba(40,52,68,0.98)' : 'rgba(20,26,38,0.95)';
-  roundRect(ctx, r.back.x, r.back.y, r.back.w, r.back.h, 8);
-  ctx.fill();
+  roundRect(ctx, r.back.x, r.back.y, r.back.w, r.back.h, 8); ctx.fill();
   ctx.shadowBlur = 0;
   ctx.strokeStyle = backHover ? '#c8d8ea' : 'rgba(120,140,170,0.5)';
   ctx.lineWidth = backHover ? 2.5 : 1.5;
-  roundRect(ctx, r.back.x, r.back.y, r.back.w, r.back.h, 8);
-  ctx.stroke();
+  roundRect(ctx, r.back.x, r.back.y, r.back.w, r.back.h, 8); ctx.stroke();
   ctx.restore();
-
   ctx.textAlign = 'center';
   ctx.font = 'bold 15px system-ui, sans-serif';
   ctx.fillStyle = backHover ? '#ffffff' : '#c8d8ea';
   ctx.fillText('← BACK  [ESC]', W / 2, r.back.y + 25);
-
   ctx.restore();
 }
 
@@ -1988,61 +2016,39 @@ function drawArmoryUpgradeCard(rect, icon, title, sub, tier, maxTier, costs) {
   var maxed = tier >= maxTier;
   var nextCost = maxed ? 0 : costs[tier];
   var canBuy = !maxed && META.money >= nextCost;
-
   ctx.save();
-  if (canBuy && hovered) {
-    ctx.shadowColor = '#7ee081';
-    ctx.shadowBlur = 10;
-  }
-  ctx.fillStyle = (canBuy && hovered) ? 'rgba(24,42,30,0.98)'
-                 : canBuy ? 'rgba(16,26,20,0.98)'
-                 : 'rgba(14,18,24,0.9)';
-  roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 12);
-  ctx.fill();
+  if (canBuy && hovered) { ctx.shadowColor = '#7ee081'; ctx.shadowBlur = 10; }
+  ctx.fillStyle = (canBuy && hovered) ? 'rgba(24,42,30,0.98)' : canBuy ? 'rgba(16,26,20,0.98)' : 'rgba(14,18,24,0.9)';
+  roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 12); ctx.fill();
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = maxed ? 'rgba(126,224,129,0.6)'
-                  : canBuy ? (hovered ? '#7ee081' : 'rgba(126,224,129,0.5)')
-                  : 'rgba(110,130,160,0.3)';
+  ctx.strokeStyle = maxed ? 'rgba(126,224,129,0.6)' : canBuy ? (hovered ? '#7ee081' : 'rgba(126,224,129,0.5)') : 'rgba(110,130,160,0.3)';
   ctx.lineWidth = (canBuy && hovered) ? 3 : 1.5;
-  roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 12);
-  ctx.stroke();
+  roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 12); ctx.stroke();
   ctx.restore();
 
   ctx.textAlign = 'left';
   ctx.font = '30px system-ui, "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
   ctx.fillStyle = canBuy || maxed ? '#e8f0ff' : '#5a6b80';
   ctx.fillText(icon, rect.x + 16, rect.y + 46);
-
   ctx.font = 'bold 15px system-ui, sans-serif';
   ctx.fillStyle = canBuy || maxed ? '#e8f0ff' : '#6b7a8a';
   ctx.fillText(title, rect.x + 62, rect.y + 34);
-
   ctx.font = '11px system-ui, sans-serif';
   ctx.fillStyle = '#8fa0b8';
   ctx.fillText(sub, rect.x + 62, rect.y + 52);
-
-  /* Tier pips */
   for (var i = 0; i < maxTier; i++) {
-    var px2 = rect.x + 16 + i * 22;
-    var py2 = rect.y + rect.h - 30;
+    var px2 = rect.x + 16 + i * 22, py2 = rect.y + rect.h - 30;
     ctx.beginPath();
     ctx.arc(px2 + 8, py2 + 8, 7, 0, TAU);
     ctx.fillStyle = i < tier ? '#7ee081' : 'rgba(255,255,255,0.12)';
     ctx.fill();
     ctx.strokeStyle = i < tier ? '#3a8a4a' : 'rgba(255,255,255,0.2)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    ctx.lineWidth = 1.5; ctx.stroke();
   }
-
   ctx.textAlign = 'right';
   ctx.font = 'bold 13px system-ui, sans-serif';
-  if (maxed) {
-    ctx.fillStyle = '#7ee081';
-    ctx.fillText('MAXED', rect.x + rect.w - 16, rect.y + rect.h - 22);
-  } else {
-    ctx.fillStyle = canBuy ? '#ffe066' : '#7a5a1a';
-    ctx.fillText('💰 ' + nextCost, rect.x + rect.w - 16, rect.y + rect.h - 22);
-  }
+  if (maxed) { ctx.fillStyle = '#7ee081'; ctx.fillText('MAXED', rect.x + rect.w - 16, rect.y + rect.h - 22); }
+  else { ctx.fillStyle = canBuy ? '#ffe066' : '#7a5a1a'; ctx.fillText('💰 ' + nextCost, rect.x + rect.w - 16, rect.y + rect.h - 22); }
 }
 
 /* =========================================================
@@ -2055,11 +2061,7 @@ function makeDecor() {
   for (var i = 0; i < n; i++) {
     var x = rand(0, W), y = rand(0, H);
     if (dist(x, y, W / 2, H / 2) < 200) continue;
-    G.decor.push({
-      x: x, y: y, r: rand(14, 34),
-      type: Math.random() < 0.65 ? 'bush' : 'rock',
-      seed: rand(0, TAU)
-    });
+    G.decor.push({ x: x, y: y, r: rand(14, 34), type: Math.random() < 0.65 ? 'bush' : 'rock', seed: rand(0, TAU) });
   }
 }
 
@@ -2068,10 +2070,10 @@ function makeDecor() {
    ========================================================= */
 
 var GROUND = {
+  Spring: ['#0d1a0e', '#142414'],
   Summer: ['#101c0c', '#172711'],
-  Winter: ['#0c1219', '#131d29'],
   Autumn: ['#1a1108', '#241a0e'],
-  Spring: ['#0d1a0e', '#142414']
+  Winter: ['#0c1219', '#131d29']
 };
 
 function render() {
@@ -2097,7 +2099,6 @@ function render() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 
   drawLighting(sx, sy);
-
   ctx.setTransform(1, 0, 0, 1, sx, sy);
   drawGlow();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -2105,7 +2106,7 @@ function render() {
   drawDamageVignette();
   drawDamageFlash();
 
-  if (G.state !== 'shop' && G.state !== 'armory') drawHUD();
+  if (G.state !== 'shop' && G.state !== 'armory' && G.state !== 'paused') drawHUD();
 
   if (G.state === 'menu')      drawMenu();
   if (G.state === 'season')    drawSeasonScreen();
@@ -2116,7 +2117,34 @@ function render() {
   if (G.state === 'armory')    drawArmory();
 
   drawDamageNumbers();
+  drawWaveBanner();
   drawCursor();
+}
+
+/* === WAVE BONUS BANNER === */
+function drawWaveBanner() {
+  if (G.waveBannerT <= 0) return;
+  var t = G.waveBannerT / G.waveBannerMax;
+  var alpha = clamp(t * 2, 0, 1) * clamp((1 - t) * 3 + 0.4, 0, 1);
+  if (alpha <= 0.01) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = 'center';
+  var y = H - 140;
+  /* Backing panel */
+  ctx.fillStyle = 'rgba(6,10,18,0.72)';
+  var bwidth = Math.min(520, W - 80);
+  roundRect(ctx, W / 2 - bwidth / 2, y - 24, bwidth, 44, 10);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(126,224,129,0.7)';
+  ctx.lineWidth = 2;
+  roundRect(ctx, W / 2 - bwidth / 2, y - 24, bwidth, 44, 10);
+  ctx.stroke();
+  /* Text */
+  ctx.font = 'bold 22px system-ui, sans-serif';
+  ctx.fillStyle = '#7ee081';
+  ctx.fillText(G.waveBanner, W / 2, y + 6);
+  ctx.restore();
 }
 
 function drawDamageVignette() {
@@ -2178,7 +2206,7 @@ function drawDamageNumbers() {
 }
 
 function drawGround() {
-  var cols = GROUND[G.season] || GROUND.Summer;
+  var cols = GROUND[G.season] || GROUND.Spring;
   ctx.fillStyle = cols[0];
   ctx.fillRect(-40, -40, W + 80, H + 80);
   ctx.save();
@@ -2198,8 +2226,7 @@ function drawGround() {
     ctx.globalAlpha = 0.20;
     ctx.fillStyle = '#cfe6ff';
     for (var i = 0; i < 180; i++) {
-      var px = (i * 137.5) % W;
-      var py = (i * 251.3) % H;
+      var px = (i * 137.5) % W, py = (i * 251.3) % H;
       ctx.fillRect(px, py, 2, 2);
     }
     ctx.restore();
@@ -2214,9 +2241,7 @@ function drawDecor() {
     ctx.save();
     ctx.translate(d.x, d.y);
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    ctx.beginPath();
-    ctx.ellipse(3, d.r * 0.45, d.r * 1.05, d.r * 0.42, 0, 0, TAU);
-    ctx.fill();
+    ctx.beginPath(); ctx.ellipse(3, d.r * 0.45, d.r * 1.05, d.r * 0.42, 0, 0, TAU); ctx.fill();
     if (d.type === 'bush') {
       var c = '#1d3318';
       if (winter) c = '#28394d';
@@ -2253,9 +2278,7 @@ function drawLeavesUnder() {
     ctx.rotate(lf.rot);
     ctx.globalAlpha = lf.stun ? 0.4 : 1;
     ctx.fillStyle = lf.golden ? '#e8c24a' : (lf.stun ? '#4b6b3a' : '#5f9c3f');
-    ctx.beginPath();
-    ctx.ellipse(0, 0, lf.size, lf.size * 0.5, 0, 0, TAU);
-    ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, 0, lf.size, lf.size * 0.5, 0, 0, TAU); ctx.fill();
     ctx.strokeStyle = 'rgba(0,0,0,0.35)';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(-lf.size, 0); ctx.lineTo(lf.size, 0); ctx.stroke();
@@ -2271,9 +2294,7 @@ function drawBank() {
   ctx.translate(b.x, b.y);
 
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.beginPath();
-  ctx.ellipse(0, h * 0.55, w * 0.7, h * 0.35, 0, 0, TAU);
-  ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0, h * 0.55, w * 0.7, h * 0.35, 0, 0, TAU); ctx.fill();
 
   if (breached) {
     var pulse = 0.5 + 0.5 * Math.sin(G.time * 5);
@@ -2289,28 +2310,20 @@ function drawBank() {
 
   var hit = b.hitFlash > 0;
   var g = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
-  if (breached) {
-    g.addColorStop(0, '#5a2424'); g.addColorStop(0.55, '#3a1818'); g.addColorStop(1, '#241010');
-  } else if (hit) {
-    g.addColorStop(0, '#9aa5b4'); g.addColorStop(1, '#5a6472');
-  } else {
-    g.addColorStop(0, '#6b7280'); g.addColorStop(0.55, '#4b5563'); g.addColorStop(1, '#333b47');
-  }
+  if (breached) { g.addColorStop(0, '#5a2424'); g.addColorStop(0.55, '#3a1818'); g.addColorStop(1, '#241010'); }
+  else if (hit) { g.addColorStop(0, '#9aa5b4'); g.addColorStop(1, '#5a6472'); }
+  else { g.addColorStop(0, '#6b7280'); g.addColorStop(0.55, '#4b5563'); g.addColorStop(1, '#333b47'); }
   ctx.fillStyle = g;
-  roundRect(ctx, -w / 2, -h / 2, w, h, 9);
-  ctx.fill();
+  roundRect(ctx, -w / 2, -h / 2, w, h, 9); ctx.fill();
   ctx.strokeStyle = breached ? '#ff6644' : '#a3adba';
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
+  ctx.lineWidth = 2.5; ctx.stroke();
 
   ctx.fillStyle = 'rgba(255,255,255,0.09)';
-  roundRect(ctx, -w / 2 + 7, -h / 2 + 7, w - 14, 15, 5);
-  ctx.fill();
+  roundRect(ctx, -w / 2 + 7, -h / 2 + 7, w - 14, 15, 5); ctx.fill();
 
   ctx.fillStyle = breached ? '#6a3030' : '#8b95a3';
   for (var i = -1; i <= 1; i += 2) {
-    roundRect(ctx, i * (w / 2 - 14) - 5, -h / 2 + 6, 10, h - 12, 3);
-    ctx.fill();
+    roundRect(ctx, i * (w / 2 - 14) - 5, -h / 2 + 6, 10, h - 12, 3); ctx.fill();
   }
 
   if (breached) {
@@ -2340,8 +2353,7 @@ function drawBank() {
   ctx.fillStyle = breached ? '#4a1a1a' : '#232b36';
   ctx.fill();
   ctx.strokeStyle = breached ? '#ff6644' : '#9aa5b4';
-  ctx.lineWidth = 3.5;
-  ctx.stroke();
+  ctx.lineWidth = 3.5; ctx.stroke();
   if (breached) {
     ctx.save();
     ctx.rotate(-0.7);
@@ -2374,63 +2386,55 @@ function drawBank() {
     var cx = -w / 2 - 26 - (c % 2) * 24;
     var cy = h / 2 - 18 - Math.floor(c / 2) * 20;
     ctx.fillStyle = '#8a6334';
-    roundRect(ctx, cx, cy, 18, 14, 3);
-    ctx.fill();
+    roundRect(ctx, cx, cy, 18, 14, 3); ctx.fill();
     ctx.strokeStyle = '#5d4222';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    ctx.lineWidth = 1.5; ctx.stroke();
   }
   ctx.restore();
 }
 
-/* === LINE BARRICADES === */
+/* === THICKER BARRICADES === */
 function drawBarricades() {
   for (var i = 0; i < G.barricades.length; i++) {
     var bc = G.barricades[i];
-    var dx = bc.x2 - bc.x1;
-    var dy = bc.y2 - bc.y1;
+    var dx = bc.x2 - bc.x1, dy = bc.y2 - bc.y1;
     var len = Math.hypot(dx, dy) || 1;
-    var ux = dx / len;
-    var uy = dy / len;
-
     ctx.save();
-
     /* Shadow strip */
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-    ctx.lineWidth = 12;
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.lineWidth = 20;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(bc.x1 + 3, bc.y1 + 6);
-    ctx.lineTo(bc.x2 + 3, bc.y2 + 6);
+    ctx.moveTo(bc.x1 + 3, bc.y1 + 8);
+    ctx.lineTo(bc.x2 + 3, bc.y2 + 8);
     ctx.stroke();
 
-    /* Sandbag chain */
-    var spacing = 16;
+    var spacing = 18;
     var count = Math.max(2, Math.floor(len / spacing));
-    var stepX = dx / count;
-    var stepY = dy / count;
+    var stepX = dx / count, stepY = dy / count;
     var angle = Math.atan2(dy, dx);
-
     for (var j = 0; j <= count; j++) {
-      var bx = bc.x1 + stepX * j;
-      var by = bc.y1 + stepY * j;
+      var bx = bc.x1 + stepX * j, by = bc.y1 + stepY * j;
       ctx.save();
       ctx.translate(bx, by);
       ctx.rotate(angle);
+      /* Thicker sandbag: 28x22 (was 20x16) */
       ctx.fillStyle = '#7a6a4f';
-      roundRect(ctx, -10, -8, 20, 16, 4);
-      ctx.fill();
+      roundRect(ctx, -14, -11, 28, 22, 5); ctx.fill();
       ctx.strokeStyle = '#5a4d38';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+      ctx.lineWidth = 2; ctx.stroke();
       /* Highlight */
-      ctx.fillStyle = 'rgba(255,255,255,0.12)';
-      roundRect(ctx, -8, -6, 16, 4, 2);
-      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      roundRect(ctx, -11, -8, 22, 6, 3); ctx.fill();
+      /* Dark seam down the middle */
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-10, 0);
+      ctx.lineTo(10, 0);
+      ctx.stroke();
       ctx.restore();
     }
-
-    /* End caps */
     ctx.restore();
   }
 }
@@ -2450,8 +2454,7 @@ function drawTurrets() {
     ctx.rotate(t.angle);
     var rec = t.recoil * 5;
     ctx.fillStyle = '#9aa5b4';
-    roundRect(ctx, 6 - rec, -4, 26, 8, 3);
-    ctx.fill();
+    roundRect(ctx, 6 - rec, -4, 26, 8, 3); ctx.fill();
     ctx.strokeStyle = '#5c6672';
     ctx.lineWidth = 1.5; ctx.stroke();
     ctx.restore();
@@ -2471,10 +2474,10 @@ function drawPickups() {
     ctx.globalAlpha = fade;
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
     ctx.beginPath(); ctx.ellipse(0, 12, 11, 4, 0, 0, TAU); ctx.fill();
+
     if (pk.type === 'granola') {
       ctx.fillStyle = '#a9713a';
-      roundRect(ctx, -9, -6, 18, 13, 3);
-      ctx.fill();
+      roundRect(ctx, -9, -6, 18, 13, 3); ctx.fill();
       ctx.strokeStyle = '#6d4522';
       ctx.lineWidth = 1.5; ctx.stroke();
       ctx.fillStyle = '#d9a86c';
@@ -2484,14 +2487,42 @@ function drawPickups() {
       ctx.font = 'bold 9px system-ui';
       ctx.textAlign = 'center';
       ctx.fillText('x' + (pk.amount || 5), 0, -10);
-    } else {
+    } else if (pk.type === 'ammo') {
       ctx.fillStyle = '#c9a227';
-      roundRect(ctx, -9, -7, 18, 14, 3);
-      ctx.fill();
+      roundRect(ctx, -9, -7, 18, 14, 3); ctx.fill();
       ctx.strokeStyle = '#7d651a';
       ctx.lineWidth = 1.5; ctx.stroke();
       ctx.fillStyle = '#fff0a8';
       ctx.fillRect(-4, -4, 8, 8);
+    } else if (pk.type === 'magnet') {
+      /* Purple glow behind the magnet */
+      ctx.save();
+      ctx.globalAlpha = 0.55 + 0.3 * Math.sin(G.time * 6);
+      var mg = ctx.createRadialGradient(0, 0, 2, 0, 0, 22);
+      mg.addColorStop(0, '#c084fc');
+      mg.addColorStop(1, 'rgba(192,132,252,0)');
+      ctx.fillStyle = mg;
+      ctx.beginPath(); ctx.arc(0, 0, 22, 0, TAU); ctx.fill();
+      ctx.restore();
+      /* U-shaped magnet */
+      ctx.lineWidth = 4.5;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#e0e0ff';
+      ctx.beginPath();
+      ctx.arc(0, -1, 8, Math.PI, 0, false);   /* top arc */
+      ctx.moveTo(-8, -1);
+      ctx.lineTo(-8, 9);
+      ctx.moveTo(8, -1);
+      ctx.lineTo(8, 9);
+      ctx.stroke();
+      /* Red and blue tips */
+      ctx.strokeStyle = '#ff4455';
+      ctx.beginPath(); ctx.moveTo(-8, 5); ctx.lineTo(-8, 9); ctx.stroke();
+      ctx.strokeStyle = '#5588ff';
+      ctx.beginPath(); ctx.moveTo(8, 5); ctx.lineTo(8, 9); ctx.stroke();
+      /* Little sparkle on the magnet */
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(0, -10, 1.6, 0, TAU); ctx.fill();
     }
     ctx.restore();
   }
@@ -2503,7 +2534,6 @@ function drawRobbers() {
     var alpha = 1;
     if (r.hidden && !r.fleeing) alpha = isLit(r.x, r.y) ? 1 : 0.04;
     var isBrute = r.type === 'brute';
-
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(r.x, r.y);
@@ -2527,7 +2557,6 @@ function drawRobbers() {
     var flash = r.hitFlash > 0;
     var bodyColor = isBrute ? (flash ? '#ffbb99' : '#4a0d1a') : (flash ? '#ff8899' : '#8b1e2d');
     var strokeColor = flash ? '#ffffff' : (r.fleeing ? '#ffd45f' : (isBrute ? '#ffcc44' : '#5c1220'));
-
     ctx.fillStyle = bodyColor;
     ctx.beginPath(); ctx.arc(0, 0, r.r, 0, TAU); ctx.fill();
     ctx.strokeStyle = strokeColor;
@@ -2540,8 +2569,7 @@ function drawRobbers() {
     ctx.fillRect(-r.r, -5, r.r * 2, 7);
     ctx.restore();
 
-    var eyeR = isBrute ? 3 : 2.2;
-    var eyeOff = isBrute ? 6.5 : 4.5;
+    var eyeR = isBrute ? 3 : 2.2, eyeOff = isBrute ? 6.5 : 4.5;
     ctx.fillStyle = isBrute ? '#ff4422' : '#ffdd55';
     ctx.beginPath();
     ctx.arc(-eyeOff, -7, eyeR, 0, TAU);
@@ -2566,8 +2594,7 @@ function drawRobbers() {
       ctx.save();
       var wobble = Math.sin(G.time * 9) * 1.5;
       ctx.fillStyle = '#8a6334';
-      roundRect(ctx, -9 + wobble, sackY - 6, 18, 14, 3);
-      ctx.fill();
+      roundRect(ctx, -9 + wobble, sackY - 6, 18, 14, 3); ctx.fill();
       ctx.strokeStyle = '#5d4222';
       ctx.lineWidth = 1.5; ctx.stroke();
       ctx.fillStyle = '#d9a86c';
@@ -2666,13 +2693,11 @@ function drawPlayers() {
     ctx.rotate(p.angle);
     var rec = p.recoil * 6;
     ctx.fillStyle = '#2f3640';
-    roundRect(ctx, 2 - rec, -3.5, 27, 7, 2);
-    ctx.fill();
+    roundRect(ctx, 2 - rec, -3.5, 27, 7, 2); ctx.fill();
     ctx.strokeStyle = '#8b95a3';
     ctx.lineWidth = 1.2; ctx.stroke();
     ctx.fillStyle = '#8b95a3';
-    roundRect(ctx, 12 - rec, -6.5, 9, 4, 1.5);
-    ctx.fill();
+    roundRect(ctx, 12 - rec, -6.5, 9, 4, 1.5); ctx.fill();
     ctx.restore();
 
     ctx.fillStyle = p.dark;
@@ -2685,9 +2710,7 @@ function drawPlayers() {
       ctx.fillStyle = '#ffcc44';
       ctx.strokeStyle = '#7a5a1a';
       ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(-p.r + 2, -p.r + 2, 6, 0, TAU);
-      ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(-p.r + 2, -p.r + 2, 6, 0, TAU); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#1a1a1a';
       ctx.font = 'bold 9px system-ui';
       ctx.textAlign = 'center';
@@ -2757,13 +2780,10 @@ function drawGlow() {
     ctx.fillStyle = col;
     ctx.globalAlpha = 0.9;
     var thick = b.team === 'player' && (G.playerDmgBonus + metaDamageBonus()) > 0
-      ? 2.2 + (G.playerDmgBonus + metaDamageBonus()) * 0.6
-      : 1.6;
-    roundRect(ctx, -14, -thick, 20, thick * 2, thick);
-    ctx.fill();
+      ? 2.2 + (G.playerDmgBonus + metaDamageBonus()) * 0.6 : 1.6;
+    roundRect(ctx, -14, -thick, 20, thick * 2, thick); ctx.fill();
     ctx.globalAlpha = 0.35;
-    roundRect(ctx, -26, -thick * 1.8, 36, thick * 3.6, thick * 1.8);
-    ctx.fill();
+    roundRect(ctx, -26, -thick * 1.8, 36, thick * 3.6, thick * 1.8); ctx.fill();
     ctx.restore();
   }
   ctx.globalAlpha = 1;
@@ -2866,26 +2886,21 @@ function drawLighting(sx, sy) {
     addRadialLight(G.bank.x - lampOff, G.bank.y + 60, 100, 0.65);
     addRadialLight(G.bank.x + lampOff, G.bank.y + 60, 100, 0.65);
   }
-  for (var i = 0; i < G.turrets.length; i++) {
-    addRadialLight(G.turrets[i].x, G.turrets[i].y, 80, 0.5);
-  }
+  for (var i = 0; i < G.turrets.length; i++) addRadialLight(G.turrets[i].x, G.turrets[i].y, 80, 0.5);
   for (var j = 0; j < G.players.length; j++) {
     var p = G.players[j];
     if (p.down) continue;
     addRadialLight(p.x, p.y, 110 * v, 1);
     addCone(p.x, p.y, p.angle, 520 * v, 0.55, 1);
-    if (p.muzzle > 0) {
-      addRadialLight(p.x + Math.cos(p.angle) * 24, p.y + Math.sin(p.angle) * 24, 200, 1);
-    }
+    if (p.muzzle > 0) addRadialLight(p.x + Math.cos(p.angle) * 24, p.y + Math.sin(p.angle) * 24, 200, 1);
   }
   for (var f = 0; f < G.flashes.length; f++) {
     var fl = G.flashes[f];
     var k = fl.life / fl.max;
     addRadialLight(fl.x, fl.y, fl.r * k, 1);
   }
-  for (var q = 0; q < G.pickups.length; q++) {
-    addRadialLight(G.pickups[q].x, G.pickups[q].y, 60, 0.6);
-  }
+  for (var q = 0; q < G.pickups.length; q++) addRadialLight(G.pickups[q].x, G.pickups[q].y, 60, 0.6);
+
   lctx.globalCompositeOperation = 'source-over';
   lctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -2922,7 +2937,7 @@ function drawLighting(sx, sy) {
    ========================================================= */
 
 function drawHUD() {
-  if (G.state === 'menu' || G.state === 'season' || G.state === 'armory') return;
+  if (G.state === 'menu' || G.state === 'season' || G.state === 'armory' || G.state === 'paused') return;
   ctx.save();
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
@@ -2959,8 +2974,7 @@ function drawHUD() {
     var bx = W / 2 - bw / 2;
     var by = 20;
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    roundRect(ctx, bx - 2, by - 2, bw + 4, 22, 6);
-    ctx.fill();
+    roundRect(ctx, bx - 2, by - 2, bw + 4, 22, 6); ctx.fill();
     if (G.bank.breached) {
       var pulse = 0.5 + 0.5 * Math.sin(G.time * 5);
       ctx.fillStyle = 'rgba(60,10,10,0.95)';
@@ -2973,7 +2987,7 @@ function drawHUD() {
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 12px system-ui, sans-serif';
-      ctx.fillText('BANK BREACHED — ' + G.granola + ' granola left', W / 2, by + 13);
+      ctx.fillText('BANK BREACHED — press P to repair for ' + REPAIR_COST, W / 2, by + 13);
     } else {
       ctx.fillStyle = '#1a1f28';
       roundRect(ctx, bx, by, bw, 18, 5); ctx.fill();
@@ -3055,8 +3069,7 @@ function drawHUD() {
     ctx.fillText(p.id === 0 ? 'PLAYER 1' : 'PLAYER 2 (auto-aim)', px + 12, py + 19);
 
     for (var hh = 0; hh < 10; hh++) {
-      var hx = px + 12 + hh * 13;
-      var hy = py + 32;
+      var hx = px + 12 + hh * 13, hy = py + 32;
       var filled = hh < p.hp;
       var isLostHeart = wasHurt && (hh === p.hp);
       ctx.beginPath();
@@ -3065,8 +3078,7 @@ function drawHUD() {
         ctx.fillStyle = 'rgba(255,40,40,' + G.heartFlash + ')';
         ctx.fill();
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        ctx.lineWidth = 2; ctx.stroke();
       } else {
         ctx.fillStyle = filled ? (p.hp <= 1 ? '#e04b5a' : '#ff6b7a') : 'rgba(255,255,255,0.12)';
         ctx.fill();
@@ -3079,8 +3091,7 @@ function drawHUD() {
     ctx.textAlign = 'left';
     ctx.fillText(reloading ? 'RELOADING...' : (p.clip + ' / ' + p.reserve), px + 12, py + 58);
 
-    var pipStart = px + 96;
-    var pipArea = 128;
+    var pipStart = px + 96, pipArea = 128;
     var pipW = Math.max(2, Math.min(6, pipArea / p.clipSize - 2));
     var pipGap = pipW + 2;
     for (var q = 0; q < p.clipSize; q++) {
@@ -3113,14 +3124,12 @@ function drawHUD() {
     ctx.fillStyle = 'rgba(230,240,255,' + (0.5 + 0.5 * Math.sin(G.time * 8)) + ')';
     ctx.fillText(G.wave < G.wavesPerLevel ? 'WAVE CLEAR' : 'LEVEL CLEAR', W / 2, H / 2 - 60);
   }
-
   if (G.state === 'play' && (G.spawnLeft > 0 || G.robbers.length > 0)) {
     ctx.textAlign = 'right';
     ctx.font = 'bold 13px system-ui, sans-serif';
     ctx.fillStyle = '#8b1e2d';
     ctx.fillText('ROBBERS REMAINING: ' + (G.robbers.length + G.spawnLeft), W - 18, 30);
   }
-
   ctx.restore();
 }
 
@@ -3129,7 +3138,7 @@ function drawHUD() {
    ========================================================= */
 
 function drawCursor() {
-  if (G.state !== 'play' && G.state !== 'paused' && G.state !== 'place') return;
+  if (G.state !== 'play' && G.state !== 'place') return;
   if (!G.players[0]) return;
   var x = mouse.x, y = mouse.y;
   ctx.save();
@@ -3148,12 +3157,92 @@ function drawCursor() {
 
 function panel(x, y, w, h) {
   ctx.fillStyle = 'rgba(6,10,18,0.86)';
-  roundRect(ctx, x, y, w, h, 14);
-  ctx.fill();
+  roundRect(ctx, x, y, w, h, 14); ctx.fill();
   ctx.strokeStyle = 'rgba(120,140,170,0.35)';
   ctx.lineWidth = 2;
-  roundRect(ctx, x, y, w, h, 14);
-  ctx.stroke();
+  roundRect(ctx, x, y, w, h, 14); ctx.stroke();
+}
+
+function drawPaused() {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.85)';
+  ctx.fillRect(0, 0, W, H);
+  var r = getPauseShopRegions();
+  panel(r.px, r.py, r.pw, r.ph);
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 30px system-ui, sans-serif';
+  ctx.fillStyle = '#dfe7f2';
+  ctx.fillText('⏸  PAUSED — FIELD SHOP', W / 2, r.py + 44);
+  ctx.font = '13px system-ui, sans-serif';
+  ctx.fillStyle = '#8fa0b8';
+  ctx.fillText('Emergency upgrades at DOUBLE cost · Press P or ESC to resume', W / 2, r.py + 70);
+  ctx.font = 'bold 22px system-ui, sans-serif';
+  ctx.fillStyle = '#c9a227';
+  ctx.fillText('🌾 ' + G.granola + ' granola', W / 2, r.py + 104);
+
+  for (var i = 0; i < r.cards.length; i++) {
+    var card = r.cards[i];
+    var item = card.item;
+    var cost = getPauseItemCost(item);
+    var canAfford = G.granola >= cost;
+    var hovered = pointInRect(mouse, card);
+    var isRepair = item.id === 'repair_breach';
+
+    ctx.save();
+    if (hovered && canAfford) {
+      ctx.shadowColor = isRepair ? '#ff6644' : '#7ee081';
+      ctx.shadowBlur = 14;
+    }
+    ctx.fillStyle = isRepair
+      ? (canAfford ? 'rgba(50,20,20,0.98)' : 'rgba(20,12,12,0.9)')
+      : (canAfford && hovered) ? 'rgba(24,42,30,0.98)' : canAfford ? 'rgba(16,26,20,0.98)' : 'rgba(14,18,24,0.9)';
+    roundRect(ctx, card.x, card.y, card.w, card.h, 12); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = isRepair
+      ? (canAfford ? '#ff6644' : 'rgba(200,80,60,0.5)')
+      : (canAfford ? (hovered ? '#7ee081' : 'rgba(126,224,129,0.55)') : 'rgba(110,130,160,0.3)');
+    ctx.lineWidth = (canAfford && hovered) ? 3 : (isRepair && canAfford ? 2.5 : 2);
+    roundRect(ctx, card.x, card.y, card.w, card.h, 12); ctx.stroke();
+    ctx.restore();
+
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 10px system-ui, sans-serif';
+    ctx.fillStyle = isRepair ? '#ff6644' : '#ffcc44';
+    ctx.fillText(isRepair ? '⚡ EMERGENCY' : '2× COST', card.x + card.w / 2, card.y + 18);
+
+    ctx.font = '44px system-ui, "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+    ctx.fillStyle = canAfford ? '#e8f0ff' : '#5a6b80';
+    ctx.fillText(item.icon, card.x + card.w / 2, card.y + 68);
+
+    ctx.font = 'bold 16px system-ui, sans-serif';
+    ctx.fillStyle = canAfford ? '#e8f0ff' : '#5a6b80';
+    ctx.fillText(item.name, card.x + card.w / 2, card.y + 104);
+
+    ctx.font = '11.5px system-ui, sans-serif';
+    ctx.fillStyle = canAfford ? '#9fb0c6' : '#4a5568';
+    wrapText(item.desc, card.x + card.w / 2, card.y + 128, card.w - 24, 14);
+
+    var bought = G.purchaseCounts[item.id] || 0;
+    if (bought > 0) {
+      ctx.font = '10px system-ui, sans-serif';
+      ctx.fillStyle = '#7a5a1a';
+      ctx.fillText('bought ×' + bought, card.x + card.w / 2, card.y + card.h - 66);
+    }
+
+    ctx.font = 'bold 18px system-ui, sans-serif';
+    ctx.fillStyle = canAfford ? (isRepair ? '#ff8866' : '#c9a227') : '#7a5a1a';
+    ctx.fillText('🌾 ' + cost, card.x + card.w / 2, card.y + card.h - 38);
+
+    ctx.font = 'bold 11px system-ui, sans-serif';
+    if (canAfford) {
+      ctx.fillStyle = isRepair ? '#ff8866' : '#7ee081';
+      ctx.fillText('CLICK TO BUY', card.x + card.w / 2, card.y + card.h - 14);
+    } else {
+      ctx.fillStyle = '#5a6b80';
+      ctx.fillText('NEED ' + (cost - G.granola) + ' MORE', card.x + card.w / 2, card.y + card.h - 14);
+    }
+  }
+  ctx.restore();
 }
 
 function getMenuRegions() {
@@ -3191,13 +3280,14 @@ function drawMenu() {
   var lines = [
     ['WASD', 'Move (P1)'],
     ['Mouse + LMB', 'Aim & shoot (P1)'],
+    ['P', 'Pause — opens Field Shop'],
     ['R', 'Reload / respawn P1 when down'],
     ['E / M', 'Eat 5 granola = +1 HP (P1/P2)'],
     ['F or RMB', 'Punch'],
     ['Arrow Keys', 'Move P2 (auto-aims)']
   ];
   ctx.textAlign = 'left';
-  var ly = py + 196;
+  var ly = py + 192;
   for (var i = 0; i < lines.length; i++) {
     ctx.fillStyle = '#7ee081';
     ctx.font = 'bold 13px system-ui, sans-serif';
@@ -3205,7 +3295,7 @@ function drawMenu() {
     ctx.fillStyle = '#9fb0c6';
     ctx.font = '13px system-ui, sans-serif';
     ctx.fillText(lines[i][1], px + 200, ly);
-    ly += 22;
+    ly += 20;
   }
 
   var r = getMenuRegions();
@@ -3237,7 +3327,6 @@ function drawMenu() {
     ctx.restore();
   }
 
-  /* Armory button */
   ctx.font = 'bold 15px system-ui, sans-serif';
   ctx.fillStyle = hoverArm ? '#ffe066' : '#c9a227';
   ctx.fillText('⚙  ARMORY  [A]  ·  ' + META.money + ' money', W / 2, py + ph - 12);
@@ -3248,7 +3337,6 @@ function drawMenu() {
     roundRect(ctx, r.armory.x, r.armory.y, r.armory.w, r.armory.h, 8); ctx.stroke();
     ctx.restore();
   }
-
   ctx.restore();
 }
 
@@ -3264,18 +3352,14 @@ function getSeasonRegions() {
   var startX = W / 2 - totalW / 2;
   var cardY = py + 100;
   var cards = [];
-  for (var i = 0; i < 4; i++) {
-    cards.push({ x: startX + i * (cardW + gap), y: cardY, w: cardW, h: cardH, index: i });
-  }
+  for (var i = 0; i < 4; i++) cards.push({ x: startX + i * (cardW + gap), y: cardY, w: cardW, h: cardH, index: i });
   var modeW = Math.min(210, (pw - 60) / 2);
-  var modeH = 44;
-  var modeGap = 14;
+  var modeH = 44, modeGap = 14;
   var totalModeW = modeW * 2 + modeGap;
   var modeStartX = W / 2 - totalModeW / 2;
   var modeY = cardY + cardH + 12;
   var todW = Math.min(160, (pw - 100) / 3);
-  var todH = 44;
-  var todGap = 12;
+  var todH = 44, todGap = 12;
   var totalTodW = todW * 3 + todGap * 2;
   var todStartX = W / 2 - totalTodW / 2;
   var todY = modeY + modeH + 12;
@@ -3304,13 +3388,11 @@ function drawSeasonScreen() {
   ctx.font = 'bold 30px system-ui, sans-serif';
   ctx.fillStyle = '#e8c24a';
   ctx.fillText('CHOOSE SEASON, TIME OF DAY', W / 2, py + 50);
-
   ctx.font = '13px system-ui, sans-serif';
   ctx.fillStyle = '#8fa0b8';
   ctx.fillText((G.mode === 2 ? '2 Player Co-op' : 'Single Player') + '  |  Fixed · CYCLE · RANDOM  |  Day · Night · Change', W / 2, py + 76);
 
   var r = getSeasonRegions();
-
   for (var i = 0; i < 4; i++) {
     var info = SEASON_INFO[i];
     var card = r.cards[i];
@@ -3390,13 +3472,11 @@ function drawSeasonButton(rect, label, sub, accent, selected, fillOn, fillHover)
     ctx.shadowBlur = 8;
   }
   ctx.fillStyle = selected ? fillOn : (hovered ? fillHover : 'rgba(14,20,30,0.9)');
-  roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 12);
-  ctx.fill();
+  roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 12); ctx.fill();
   ctx.shadowBlur = 0;
   ctx.strokeStyle = selected ? accent : (hovered ? accent + 'cc' : 'rgba(110,130,160,0.35)');
   ctx.lineWidth = selected ? 3 : (hovered ? 2 : 1.5);
-  roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 12);
-  ctx.stroke();
+  roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 12); ctx.stroke();
   ctx.restore();
 
   ctx.textAlign = 'center';
@@ -3420,14 +3500,9 @@ function getShopRegions() {
   var startX = W / 2 - totalW / 2;
   var cardY = py + 165;
   var cards = [];
-  for (var i = 0; i < 2; i++) {
-    cards.push({ x: startX + i * (cardW + gap), y: cardY, w: cardW, h: cardH, index: i });
-  }
+  for (var i = 0; i < 2; i++) cards.push({ x: startX + i * (cardW + gap), y: cardY, w: cardW, h: cardH, index: i });
   var skipW = 220, skipH = 44;
-  return {
-    cards: cards,
-    skip: { x: W / 2 - skipW / 2, y: cardY + cardH + 26, w: skipW, h: skipH }
-  };
+  return { cards: cards, skip: { x: W / 2 - skipW / 2, y: cardY + cardH + 26, w: skipW, h: skipH } };
 }
 
 function drawShopScreen() {
@@ -3452,10 +3527,9 @@ function drawShopScreen() {
   ctx.fillText('You have: ' + G.granola + ' granola', W / 2, py + 114);
   ctx.font = '12px system-ui, sans-serif';
   ctx.fillStyle = '#7c8fa6';
-  ctx.fillText('Costs rise 50% each time you buy the same upgrade.', W / 2, py + 138);
+  ctx.fillText('Tip: Pause the game with P to open the Field Shop (2× cost emergency upgrades).', W / 2, py + 138);
 
   var r = getShopRegions();
-
   for (var i = 0; i < 2; i++) {
     var card = r.cards[i];
     var item = G.shopChoices[i];
@@ -3518,7 +3592,6 @@ function drawShopScreen() {
   ctx.restore();
 }
 
-/* === PLACEMENT (with line barricade preview) === */
 function drawPlacementOverlay() {
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
@@ -3527,12 +3600,10 @@ function drawPlacementOverlay() {
 
   var item = G.shopPicked;
   if (!item) return;
-
   var isBarricade = item.id === 'barricade';
 
   if (isBarricade) {
     if (!G.placeAnchor) {
-      /* Step 1: choose start point */
       var validS = canPlaceBarricadePoint(mouse.x, mouse.y);
       var baseS = validS ? '126,224,129' : '224,75,90';
       ctx.save();
@@ -3543,7 +3614,6 @@ function drawPlacementOverlay() {
       ctx.strokeStyle = 'rgba(' + baseS + ',1)';
       ctx.lineWidth = 2.5;
       ctx.beginPath(); ctx.arc(0, 0, 14, 0, TAU); ctx.stroke();
-      /* Crosshair */
       ctx.beginPath();
       ctx.moveTo(-20, 0); ctx.lineTo(-8, 0);
       ctx.moveTo(8, 0); ctx.lineTo(20, 0);
@@ -3552,48 +3622,37 @@ function drawPlacementOverlay() {
       ctx.stroke();
       ctx.restore();
     } else {
-      /* Step 2: choose end point */
       var ax = G.placeAnchor.x, ay = G.placeAnchor.y;
       var len = dist(ax, ay, mouse.x, mouse.y);
       var valid = len >= 40 && len <= 280 && canPlaceBarricadeLine(ax, ay, mouse.x, mouse.y);
       var base = valid ? '126,224,129' : '224,75,90';
-
       ctx.save();
-      /* Line preview */
-      ctx.strokeStyle = 'rgba(' + base + ',0.35)';
-      ctx.lineWidth = 24;
+      ctx.strokeStyle = 'rgba(' + base + ',0.4)';
+      ctx.lineWidth = 30;
       ctx.lineCap = 'round';
       ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(mouse.x, mouse.y); ctx.stroke();
-
       ctx.strokeStyle = 'rgba(' + base + ',0.9)';
       ctx.lineWidth = 2;
       ctx.setLineDash([8, 6]);
       ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(mouse.x, mouse.y); ctx.stroke();
       ctx.setLineDash([]);
-
-      /* Anchor dot */
       ctx.fillStyle = 'rgba(' + base + ',1)';
       ctx.beginPath(); ctx.arc(ax, ay, 8, 0, TAU); ctx.fill();
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(ax, ay, 8, 0, TAU); ctx.stroke();
-
-      /* Length text */
       ctx.textAlign = 'center';
       ctx.font = 'bold 12px system-ui, sans-serif';
       ctx.fillStyle = valid ? '#7ee081' : '#e04b5a';
-      var midX = (ax + mouse.x) / 2;
-      var midY = (ay + mouse.y) / 2;
+      var midX = (ax + mouse.x) / 2, midY = (ay + mouse.y) / 2;
       ctx.fillText(Math.round(len) + 'px', midX, midY - 18);
       ctx.restore();
     }
 
-    /* Header */
     ctx.save();
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    roundRect(ctx, W / 2 - 280, 20, 560, 78, 10);
-    ctx.fill();
+    roundRect(ctx, W / 2 - 280, 20, 560, 78, 10); ctx.fill();
     ctx.font = 'bold 20px system-ui, "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
     ctx.fillStyle = '#e6edf7';
     ctx.fillText(item.icon + '  ' + item.name, W / 2, 50);
@@ -3608,18 +3667,15 @@ function drawPlacementOverlay() {
     return;
   }
 
-  /* Turret preview */
   var validT = canPlaceAt(mouse.x, mouse.y);
   var baseT = validT ? '126,224,129' : '224,75,90';
-
   ctx.save();
   ctx.translate(mouse.x, mouse.y);
   ctx.globalAlpha = 0.85;
   ctx.fillStyle = 'rgba(' + baseT + ',0.28)';
   ctx.beginPath(); ctx.arc(0, 0, 15, 0, TAU); ctx.fill();
   ctx.strokeStyle = 'rgba(' + baseT + ',1)';
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
+  ctx.lineWidth = 2.5; ctx.stroke();
   ctx.fillStyle = 'rgba(' + baseT + ',0.7)';
   roundRect(ctx, 6, -4, 26, 8, 3); ctx.fill();
   ctx.strokeStyle = 'rgba(' + baseT + ',1)';
@@ -3631,8 +3687,7 @@ function drawPlacementOverlay() {
   ctx.save();
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
-  roundRect(ctx, W / 2 - 260, 20, 520, 76, 10);
-  ctx.fill();
+  roundRect(ctx, W / 2 - 260, 20, 520, 76, 10); ctx.fill();
   ctx.font = 'bold 20px system-ui, "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
   ctx.fillStyle = '#e6edf7';
   ctx.fillText(item.icon + '  Placing: ' + item.name, W / 2, 50);
@@ -3666,7 +3721,6 @@ function drawGameOver() {
   ctx.save();
   ctx.fillStyle = 'rgba(20,0,0,0.78)';
   ctx.fillRect(0, 0, W, H);
-
   var pw = Math.min(560, W - 40);
   var ph = 440;
   var px = W / 2 - pw / 2;
@@ -3677,39 +3731,31 @@ function drawGameOver() {
   ctx.font = 'bold 34px system-ui, sans-serif';
   ctx.fillStyle = '#e04b5a';
   ctx.fillText(title, W / 2, py + 60);
-
   ctx.font = '14px system-ui, sans-serif';
   ctx.fillStyle = '#8fa0b8';
   ctx.fillText(subtitle, W / 2, py + 88);
 
-  /* Meta money reward block */
   ctx.fillStyle = 'rgba(48,40,16,0.65)';
-  roundRect(ctx, px + 40, py + 108, pw - 80, 92, 12);
-  ctx.fill();
+  roundRect(ctx, px + 40, py + 108, pw - 80, 92, 12); ctx.fill();
   ctx.strokeStyle = 'rgba(255,224,102,0.55)';
   ctx.lineWidth = 2;
-  roundRect(ctx, px + 40, py + 108, pw - 80, 92, 12);
-  ctx.stroke();
+  roundRect(ctx, px + 40, py + 108, pw - 80, 92, 12); ctx.stroke();
 
   ctx.font = 'bold 13px system-ui, sans-serif';
   ctx.fillStyle = '#c9a227';
   ctx.fillText('PEAK GRANOLA: ' + G.peakGranola, W / 2, py + 132);
-
   ctx.font = 'bold 26px system-ui, sans-serif';
   ctx.fillStyle = '#ffe066';
   ctx.fillText('+ ' + G.earnedMoney + ' granola money', W / 2, py + 168);
-
   ctx.font = '11px system-ui, sans-serif';
   ctx.fillStyle = '#8fa0b8';
   ctx.fillText('(peak granola ÷ 20)  ·  total: ' + META.money, W / 2, py + 190);
 
-  /* Stats */
   ctx.font = '13px system-ui, sans-serif';
   ctx.fillStyle = '#9fb0c6';
   ctx.fillText('Reached Level ' + G.level + '  ·  Wave ' + G.wave + '/' + G.wavesPerLevel, W / 2, py + 224);
-  ctx.fillText('Robbers stopped: ' + G.stats.killed, W / 2, py + 244);
+  ctx.fillText('Robbers stopped: ' + G.stats.killed + '  ·  Magnets used: ' + G.stats.magnetsUsed, W / 2, py + 244);
 
-  /* Buttons */
   var r = getGameOverRegions();
   var hoverMenu = pointInRect(mouse, r.menu);
   var hoverArm = pointInRect(mouse, r.armory);
@@ -3717,25 +3763,21 @@ function drawGameOver() {
   ctx.save();
   if (hoverMenu) { ctx.shadowColor = '#8fa0b8'; ctx.shadowBlur = 10; }
   ctx.fillStyle = hoverMenu ? 'rgba(40,52,68,0.98)' : 'rgba(20,26,38,0.95)';
-  roundRect(ctx, r.menu.x, r.menu.y, r.menu.w, r.menu.h, 8);
-  ctx.fill();
+  roundRect(ctx, r.menu.x, r.menu.y, r.menu.w, r.menu.h, 8); ctx.fill();
   ctx.shadowBlur = 0;
   ctx.strokeStyle = hoverMenu ? '#c8d8ea' : 'rgba(120,140,170,0.5)';
   ctx.lineWidth = hoverMenu ? 2.5 : 1.5;
-  roundRect(ctx, r.menu.x, r.menu.y, r.menu.w, r.menu.h, 8);
-  ctx.stroke();
+  roundRect(ctx, r.menu.x, r.menu.y, r.menu.w, r.menu.h, 8); ctx.stroke();
   ctx.restore();
 
   ctx.save();
   if (hoverArm) { ctx.shadowColor = '#ffe066'; ctx.shadowBlur = 10; }
   ctx.fillStyle = hoverArm ? 'rgba(52,44,20,0.98)' : 'rgba(28,24,14,0.95)';
-  roundRect(ctx, r.armory.x, r.armory.y, r.armory.w, r.armory.h, 8);
-  ctx.fill();
+  roundRect(ctx, r.armory.x, r.armory.y, r.armory.w, r.armory.h, 8); ctx.fill();
   ctx.shadowBlur = 0;
   ctx.strokeStyle = hoverArm ? '#ffe066' : 'rgba(200,170,80,0.55)';
   ctx.lineWidth = hoverArm ? 2.5 : 1.5;
-  roundRect(ctx, r.armory.x, r.armory.y, r.armory.w, r.armory.h, 8);
-  ctx.stroke();
+  roundRect(ctx, r.armory.x, r.armory.y, r.armory.w, r.armory.h, 8); ctx.stroke();
   ctx.restore();
 
   ctx.font = 'bold 15px system-ui, sans-serif';
@@ -3744,20 +3786,6 @@ function drawGameOver() {
   ctx.fillStyle = hoverArm ? '#ffe066' : '#c9a227';
   ctx.fillText('⚙ ARMORY  [A]', r.armory.x + r.armory.w / 2, r.armory.y + 26);
 
-  ctx.restore();
-}
-
-function drawPaused() {
-  ctx.save();
-  ctx.fillStyle = 'rgba(0,0,0,0.6)';
-  ctx.fillRect(0, 0, W, H);
-  ctx.textAlign = 'center';
-  ctx.font = 'bold 44px system-ui, sans-serif';
-  ctx.fillStyle = '#dfe7f2';
-  ctx.fillText('PAUSED', W / 2, H / 2);
-  ctx.font = '16px system-ui, sans-serif';
-  ctx.fillStyle = '#7c8fa6';
-  ctx.fillText('Press P to resume', W / 2, H / 2 + 36);
   ctx.restore();
 }
 
@@ -3772,9 +3800,7 @@ function wrapText(text, cx, y, maxW, lineH) {
       ctx.fillText(line, cx, yy);
       line = w;
       yy += lineH;
-    } else {
-      line = test;
-    }
+    } else line = test;
   }
   if (line) ctx.fillText(line, cx, yy);
 }
@@ -3788,7 +3814,8 @@ var lastT = performance.now();
 function updateCursorStyle() {
   var menuLike = G.state === 'menu' || G.state === 'season' ||
                  G.state === 'shop' || G.state === 'place' ||
-                 G.state === 'gameover' || G.state === 'armory';
+                 G.state === 'gameover' || G.state === 'armory' ||
+                 G.state === 'paused';
   canvas.style.cursor = menuLike ? 'default' : 'none';
 }
 
