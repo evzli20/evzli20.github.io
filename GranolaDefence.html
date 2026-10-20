@@ -26,7 +26,7 @@ var RESPAWN_COST       = 50;
 var STEAL_AMOUNT       = 10;
 var STEAL_AMOUNT_BRUTE = 20;
 var REPAIR_COST        = 200;
-var MAX_PARTICLES      = 800;   /* Hard cap to prevent runaway lag */
+var MAX_PARTICLES      = 800;
 
 var SEASON_CYCLE  = -1;
 var SEASON_RANDOM = -2;
@@ -117,7 +117,7 @@ function playBuySound() { playBeep(500,800,0.12,0.15,'sine'); playBeep(800,1200,
 function playWaveSound() { playBeep(400,600,0.15,0.12,'sine'); playBeep(600,900,0.18,0.10,'sine'); }
 function playMagnetSound() { playBeep(200,1400,0.35,0.18,'sine'); playBeep(100,800,0.4,0.12,'triangle'); }
 
-/* ===== Seasons (Spring → Summer → Autumn → Winter) ===== */
+/* ===== Seasons ===== */
 var SEASONS = ['Spring','Summer','Autumn','Winter'];
 var SEASON_INFO = [
   { name:'Spring', icon:'🍃', color:'#7ee081', playerPerk:'Leaf Shield: falling leaves stun robbers 2.5s', robberPerk:'Spring Bloom: each wave spawns +3 extra robbers' },
@@ -140,14 +140,22 @@ var G = {
   bank:null, players:[], robbers:[], bullets:[], pickups:[], particles:[], leaves:[], flashes:[], decor:[],
   turrets:[], barricades:[], turretDmgBonus:0, turretSpeedMult:1, turretRangeBonus:0,
   playerDmgBonus:0, playerFireRateMult:1,
-  granola:0, peakGranola:0,
+  granola:0,
+  totalCollected:0,   /* <-- NEW: total granola ever added to the pool this run */
   shopChoices:[], shopPicked:null, purchaseCounts:{}, placeAnchor:null,
   spawnLeft:0, spawnTimer:0, waveDelay:0, bruteAnnounced:false,
   waveBanner:'', waveBannerT:0, waveBannerMax:2.5,
   shake:0, stats:{ killed:0, stolen:0, escaped:0, magnetsUsed:0 },
   damageFlash:0, damageVignette:0, hitStop:0, damageNumbers:[], lastHurtPlayerId:-1, heartFlash:0, lowHealthPulse:0,
-  pendingMagnets:0   /* deferred magnet uses — fixes the crash */
+  pendingMagnets:0
 };
+
+/* Helper: every granola addition goes through here so we track the run total */
+function addGranola(amount) {
+  if (!amount || amount <= 0) return;
+  G.granola += amount;
+  G.totalCollected += amount;
+}
 
 /* ===== Input ===== */
 var keys = Object.create(null);
@@ -210,6 +218,7 @@ addEventListener('keydown', function (e) {
   }
   if (k==='p' || (k==='escape' && G.state==='play')) { togglePause(); return; }
   if (k==='escape' && G.state==='paused') { G.state='play'; return; }
+  if (k==='q' && G.state==='paused') { quitRun(); return; }   /* <-- Q quits from pause */
   if (G.state !== 'play') return;
 
   var p1 = G.players[0], p2 = G.players[1];
@@ -332,7 +341,9 @@ function makePlayer(id, x, y) {
 /* ===== Level flow ===== */
 function startGame(mode) {
   G.mode = mode;
-  G.level = 1; G.granola = 0; G.peakGranola = 0;
+  G.level = 1;
+  G.granola = 0;
+  G.totalCollected = 0;   /* reset run total */
   G.turrets = []; G.barricades = [];
   G.turretDmgBonus = 0; G.turretSpeedMult = 1; G.turretRangeBonus = 0;
   G.playerDmgBonus = 0; G.playerFireRateMult = 1;
@@ -426,27 +437,26 @@ function applyWaveBonus() {
       }
     }
     if (healed) showWaveBanner('❤ WAVE BONUS: +1 HP');
-    else { G.granola += 12; showWaveBanner('🌾 WAVE BONUS: +12 GRANOLA'); }
-  } else { G.granola += 15; showWaveBanner('🌾 WAVE BONUS: +15 GRANOLA'); }
+    else { addGranola(12); showWaveBanner('🌾 WAVE BONUS: +12 GRANOLA'); }
+  } else { addGranola(15); showWaveBanner('🌾 WAVE BONUS: +15 GRANOLA'); }
   playWaveSound();
 }
 function showWaveBanner(text) { G.waveBanner = text; G.waveBannerT = G.waveBannerMax; }
 
-/* === SAFE collectAllPickups: iterates a snapshot, removes by identity === */
+/* SAFE collect — snapshot first so we never mutate while iterating */
 function collectAllPickups(sourcePlayer) {
   var p = sourcePlayer || G.players[0];
   var snapshot = G.pickups.slice();
   for (var i = 0; i < snapshot.length; i++) {
     var pk = snapshot[i];
-    if (pk.type === 'magnet') continue;  /* leave magnets alone */
+    if (pk.type === 'magnet') continue;
     if (pk.type === 'granola') {
-      G.granola += (pk.amount || 5);
+      addGranola(pk.amount || 5);
     } else if (pk.type === 'ammo') {
       p.reserve = Math.min(60, p.reserve + (pk.amount || 10));
     }
     var idx = G.pickups.indexOf(pk);
     if (idx >= 0) G.pickups.splice(idx, 1);
-    /* Small trail effect, capped */
     for (var k = 0; k < 2; k++) {
       if (G.particles.length >= MAX_PARTICLES) break;
       G.particles.push({
@@ -468,8 +478,6 @@ function useMagnet(sourcePlayer) {
   else if (G.bank) G.flashes.push({ x:G.bank.x, y:G.bank.y, r:350, life:0.5, max:0.5 });
   showWaveBanner('🧲 MAGNET! Collected everything');
 }
-
-/* Called from update() AFTER updatePickups — safe to mutate the array */
 function processPendingMagnets() {
   while (G.pendingMagnets > 0) {
     G.pendingMagnets--;
@@ -479,7 +487,7 @@ function processPendingMagnets() {
 
 function levelComplete() {
   useMagnet(null);
-  G.granola += 15 + G.level * 5;
+  addGranola(15 + G.level * 5);
   rollShop();
   G.state = 'shop';
 }
@@ -637,10 +645,11 @@ function getPauseShopItems() {
   return items;
 }
 function getPauseItemCost(item) { if (!item) return 0; var t=G.purchaseCounts[item.id]||0; return Math.round(item.cost*2*(1+0.5*t)); }
+
 function getPauseShopRegions() {
   var items = getPauseShopItems();
   var count = items.length;
-  var pw = Math.min(1100, W-40), ph = Math.min(520, H-40);
+  var pw = Math.min(1100, W-40), ph = Math.min(600, H-40);
   var px = W/2 - pw/2, py = H/2 - ph/2;
   var gap = 16, pad = 40;
   var avail = pw - pad*2;
@@ -650,12 +659,18 @@ function getPauseShopRegions() {
   var startX = W/2 - totalW/2;
   var cardY = py + 130;
   var cards = [];
-  for (var i=0;i<count;i++) cards.push({ x:startX+i*(cardW+gap), y:cardY, w:cardW, h:cardH, item:items[i] });
-  return { cards:cards, px:px, py:py, pw:pw, ph:ph };
+  for (var i=0; i<count; i++) cards.push({ x:startX+i*(cardW+gap), y:cardY, w:cardW, h:cardH, item:items[i] });
+  /* Quit button below the cards */
+  var quitW = 260, quitH = 46;
+  var quitX = W/2 - quitW/2;
+  var quitY = cardY + cardH + 20;
+  return { cards:cards, px:px, py:py, pw:pw, ph:ph, quit:{ x:quitX, y:quitY, w:quitW, h:quitH } };
 }
+
 function handlePauseClick(p) {
   var r = getPauseShopRegions();
-  for (var i=0;i<r.cards.length;i++) if (pointInRect(p, r.cards[i])) { buyPauseShopItem(r.cards[i].item); return; }
+  for (var i=0; i<r.cards.length; i++) if (pointInRect(p, r.cards[i])) { buyPauseShopItem(r.cards[i].item); return; }
+  if (pointInRect(p, r.quit)) { quitRun(); return; }
 }
 function buyPauseShopItem(item) {
   if (!item) return;
@@ -665,6 +680,13 @@ function buyPauseShopItem(item) {
   G.purchaseCounts[item.id] = (G.purchaseCounts[item.id]||0)+1;
   item.apply();
   playBuySound();
+}
+
+/* Quit: still collect leftover pickups then end the run so you earn money */
+function quitRun() {
+  if (G.state !== 'paused') return;
+  useMagnet(G.players[0]);
+  gameOver('quit');
 }
 
 /* ===== Bank collision ===== */
@@ -828,7 +850,6 @@ function killRobber(r) {
       G.pickups.push({ x:r.x, y:r.y, type:'ammo', amount:10, life:22, bob:rand(0,TAU), vx:rand(-40,40), vy:rand(-40,40) });
     }
   }
-  /* Magnet drop */
   if (Math.random() < 0.06) {
     G.pickups.push({ x:r.x+rand(-20,20), y:r.y+rand(-20,20), type:'magnet', amount:1, life:28, bob:rand(0,TAU), vx:rand(-30,30), vy:rand(-30,30) });
   }
@@ -845,13 +866,11 @@ function update(dt) {
   updateBullets(dt);
   updateTurrets(dt);
   updatePickups(dt);
-  processPendingMagnets();   /* <-- SAFE: called after the pickups loop finishes */
+  processPendingMagnets();
   updateParticles(dt);
   updateLeaves(dt);
   updateWaves(dt);
   updateDamageNumbers(dt);
-
-  if (G.granola > G.peakGranola) G.peakGranola = G.granola;
 
   var b = G.bank;
   if (b.hitFlash > 0) b.hitFlash -= dt;
@@ -1013,7 +1032,6 @@ function updateRobbers(dt) {
       }
     }
   }
-  /* Separation */
   for (var i2=0; i2<G.robbers.length; i2++) {
     for (var j=i2+1; j<G.robbers.length; j++) {
       var a = G.robbers[i2], c = G.robbers[j];
@@ -1076,7 +1094,6 @@ function updateTurrets(dt) {
   }
 }
 
-/* === SAFE updatePickups: magnet just queues a request === */
 function updatePickups(dt) {
   for (var i = G.pickups.length - 1; i >= 0; i--) {
     var pk = G.pickups[i];
@@ -1096,12 +1113,10 @@ function updatePickups(dt) {
       if (d < 70) { pk.x += (p.x - pk.x)*dt*4; pk.y += (p.y - pk.y)*dt*4; }
       if (d < 24) {
         if (pk.type === 'granola') {
-          G.granola += (pk.amount || 5);
+          addGranola(pk.amount || 5);
         } else if (pk.type === 'ammo') {
           p.reserve = Math.min(60, p.reserve + (pk.amount || 10));
         } else if (pk.type === 'magnet') {
-          /* Defer the magnet use — calling useMagnet here would mutate
-             the pickups array while we're iterating it (the bug). */
           G.pendingMagnets++;
         }
         taken = true;
@@ -1123,7 +1138,6 @@ function updatePickups(dt) {
 }
 
 function updateParticles(dt) {
-  /* Hard cap */
   if (G.particles.length > MAX_PARTICLES) G.particles.splice(0, G.particles.length - MAX_PARTICLES);
   for (var i=G.particles.length-1; i>=0; i--) {
     var p = G.particles[i];
@@ -1196,12 +1210,13 @@ function nearestRobber(x, y) {
 }
 
 function gameOver(reason, playerId) {
-  if (G.state !== 'play') return;
+  if (G.state !== 'play' && G.state !== 'paused') return;
   G.state = 'gameover';
   G.gameOverReason = reason || 'stolen';
   G.gameOverPlayerId = (typeof playerId === 'number') ? playerId : -1;
   G.shake = 20;
-  G.earnedMoney = Math.floor(G.peakGranola / 20);
+  /* Money = 20× less than TOTAL granola collected during the run */
+  G.earnedMoney = Math.floor(G.totalCollected / 20);
   META.money += G.earnedMoney;
   saveMeta();
   for (var i=0; i<50; i++) {
@@ -1758,14 +1773,12 @@ function drawPickups() {
       ctx.fillStyle = '#fff0a8';
       ctx.fillRect(-4, -4, 8, 8);
     } else if (pk.type === 'magnet') {
-      /* Lightweight purple ring — no radial gradient, no lag */
       ctx.save();
       ctx.globalAlpha = 0.5 + 0.3*Math.sin(G.time*6);
       ctx.strokeStyle = '#c084fc';
       ctx.lineWidth = 2.5;
       ctx.beginPath(); ctx.arc(0, 0, 18, 0, TAU); ctx.stroke();
       ctx.restore();
-      /* U-shape magnet */
       ctx.lineWidth = 4.5;
       ctx.lineCap = 'round';
       ctx.strokeStyle = '#e0e0ff';
@@ -2167,13 +2180,16 @@ function drawHUD() {
   ctx.fillStyle = gcolor;
   ctx.font = 'bold 15px system-ui, sans-serif';
   ctx.fillText('GRANOLA: ' + G.granola + ' (shared)' + (G.bank && G.bank.breached ? '  - BEING STOLEN' : ''), 18, 74);
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.fillStyle = '#7c8fa6';
+  ctx.fillText('total collected this run: ' + G.totalCollected, 18, 92);
   var gun = currentGun();
   ctx.font = 'bold 12px system-ui, sans-serif';
   ctx.fillStyle = '#ffcc44';
   var wtext = gun.icon + ' ' + gun.name;
   if (G.playerDmgBonus + metaDamageBonus() > 0) wtext += '  DMG +' + (G.playerDmgBonus + metaDamageBonus());
   if (G.playerFireRateMult < 1 || META.fireRateTier > 0) wtext += '  RoF ' + (G.playerFireRateMult*metaFireRateMult()).toFixed(2) + 'x';
-  ctx.fillText(wtext, 18, 94);
+  ctx.fillText(wtext, 18, 110);
 
   if (G.bank) {
     var bw = Math.min(360, W*0.4);
@@ -2348,7 +2364,7 @@ function panel(x, y, w, h) {
   roundRect(ctx, x, y, w, h, 14); ctx.stroke();
 }
 
-/* ===== Paused ===== */
+/* ===== Paused (Field Shop + Quit) ===== */
 function drawPaused() {
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.85)';
@@ -2361,10 +2377,11 @@ function drawPaused() {
   ctx.fillText('⏸  PAUSED — FIELD SHOP', W/2, r.py + 44);
   ctx.font = '13px system-ui, sans-serif';
   ctx.fillStyle = '#8fa0b8';
-  ctx.fillText('Emergency upgrades at DOUBLE cost · Press P or ESC to resume', W/2, r.py + 70);
+  ctx.fillText('Emergency upgrades at DOUBLE cost · Press P or ESC to resume · Press Q to quit', W/2, r.py + 70);
   ctx.font = 'bold 22px system-ui, sans-serif';
   ctx.fillStyle = '#c9a227';
-  ctx.fillText('🌾 ' + G.granola + ' granola', W/2, r.py + 104);
+  ctx.fillText('🌾 ' + G.granola + ' granola   ·   total collected: ' + G.totalCollected, W/2, r.py + 104);
+
   for (var i=0; i<r.cards.length; i++) {
     var card = r.cards[i], item = card.item;
     var cost = getPauseItemCost(item);
@@ -2410,6 +2427,29 @@ function drawPaused() {
     if (canAfford) { ctx.fillStyle = isRepair ? '#ff8866' : '#7ee081'; ctx.fillText('CLICK TO BUY', card.x + card.w/2, card.y + card.h - 14); }
     else { ctx.fillStyle = '#5a6b80'; ctx.fillText('NEED ' + (cost - G.granola) + ' MORE', card.x + card.w/2, card.y + card.h - 14); }
   }
+
+  /* QUIT BUTTON */
+  var q = r.quit;
+  var qHover = pointInRect(mouse, q);
+  ctx.save();
+  if (qHover) { ctx.shadowColor = '#e04b5a'; ctx.shadowBlur = 14; }
+  ctx.fillStyle = qHover ? 'rgba(70,20,20,0.98)' : 'rgba(38,14,14,0.95)';
+  roundRect(ctx, q.x, q.y, q.w, q.h, 10); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = qHover ? '#ff6666' : 'rgba(200,80,80,0.6)';
+  ctx.lineWidth = qHover ? 3 : 2;
+  roundRect(ctx, q.x, q.y, q.w, q.h, 10); ctx.stroke();
+  ctx.restore();
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 17px system-ui, sans-serif';
+  ctx.fillStyle = qHover ? '#ffb0b0' : '#e07a7a';
+  ctx.fillText('🚪  QUIT RUN  [Q]', W/2, q.y + 29);
+
+  /* Warning text */
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.fillStyle = '#8fa0b8';
+  ctx.fillText('Quitting banks your money (total collected ÷ 20) but ends the run.', W/2, q.y + q.h + 20);
+
   ctx.restore();
 }
 
@@ -2443,7 +2483,7 @@ function drawMenu() {
   var lines = [
     ['WASD', 'Move (P1)'],
     ['Mouse + LMB', 'Aim & shoot (P1)'],
-    ['P', 'Pause — opens Field Shop'],
+    ['P', 'Pause — Field Shop & Quit'],
     ['R', 'Reload / respawn P1 when down'],
     ['E / M', 'Eat 5 granola = +1 HP (P1/P2)'],
     ['F or RMB', 'Punch'],
@@ -2628,10 +2668,10 @@ function drawShopScreen() {
   ctx.fillText('+' + (15 + G.level*5) + ' granola reward  |  next: ' + nextSeasonLabel() + ' ' + nextTimeOfDayLabel(), W/2, py+82);
   ctx.font = 'bold 18px system-ui, sans-serif';
   ctx.fillStyle = '#c9a227';
-  ctx.fillText('You have: ' + G.granola + ' granola', W/2, py+114);
+  ctx.fillText('You have: ' + G.granola + ' granola  ·  total collected: ' + G.totalCollected, W/2, py+114);
   ctx.font = '12px system-ui, sans-serif';
   ctx.fillStyle = '#7c8fa6';
-  ctx.fillText('Tip: Pause with P for emergency upgrades (2× cost).', W/2, py+138);
+  ctx.fillText('Tip: Pause with P for emergency upgrades (2× cost) and Quit.', W/2, py+138);
   var r = getShopRegions();
   for (var i=0; i<2; i++) {
     var card = r.cards[i];
@@ -2795,7 +2835,7 @@ function drawPlacementOverlay() {
 
 /* ===== Game over ===== */
 function getGameOverRegions() {
-  var pw = Math.min(560, W-40), ph = 440;
+  var pw = Math.min(560, W-40), ph = 460;
   var px = W/2 - pw/2, py = H/2 - ph/2;
   return {
     menu: { x: W/2-230, y: py+ph-100, w: 220, h: 40 },
@@ -2807,41 +2847,47 @@ function drawGameOver() {
   var title, subtitle;
   if (reason === 'stolen') { title = 'ALL GRANOLA STOLEN'; subtitle = 'The robbers emptied the vault and slipped away.'; }
   else if (reason === 'team') { title = 'NO DEFENDERS LEFT'; subtitle = 'Everyone is down and nobody can afford a respawn.'; }
+  else if (reason === 'quit') { title = 'RUN ABANDONED'; subtitle = 'You quit mid-defence — the granola is banked.'; }
   else { title = 'GAME OVER'; subtitle = 'The night is over.'; }
   ctx.save();
   ctx.fillStyle = 'rgba(20,0,0,0.78)';
   ctx.fillRect(0, 0, W, H);
-  var pw = Math.min(560, W-40), ph = 440;
+  var pw = Math.min(560, W-40), ph = 460;
   var px = W/2 - pw/2, py = H/2 - ph/2;
   panel(px, py, pw, ph);
   ctx.textAlign = 'center';
   ctx.font = 'bold 34px system-ui, sans-serif';
-  ctx.fillStyle = '#e04b5a';
+  ctx.fillStyle = reason === 'quit' ? '#e0a04a' : '#e04b5a';
   ctx.fillText(title, W/2, py+60);
   ctx.font = '14px system-ui, sans-serif';
   ctx.fillStyle = '#8fa0b8';
   ctx.fillText(subtitle, W/2, py+88);
+
   ctx.fillStyle = 'rgba(48,40,16,0.65)';
   roundRect(ctx, px+40, py+108, pw-80, 92, 12); ctx.fill();
   ctx.strokeStyle = 'rgba(255,224,102,0.55)';
   ctx.lineWidth = 2;
   roundRect(ctx, px+40, py+108, pw-80, 92, 12); ctx.stroke();
+
   ctx.font = 'bold 13px system-ui, sans-serif';
   ctx.fillStyle = '#c9a227';
-  ctx.fillText('PEAK GRANOLA: ' + G.peakGranola, W/2, py+132);
+  ctx.fillText('TOTAL GRANOLA COLLECTED: ' + G.totalCollected, W/2, py+132);
   ctx.font = 'bold 26px system-ui, sans-serif';
   ctx.fillStyle = '#ffe066';
   ctx.fillText('+ ' + G.earnedMoney + ' granola money', W/2, py+168);
   ctx.font = '11px system-ui, sans-serif';
   ctx.fillStyle = '#8fa0b8';
-  ctx.fillText('(peak granola ÷ 20)  ·  total: ' + META.money, W/2, py+190);
+  ctx.fillText('(total collected ÷ 20)  ·  total: ' + META.money, W/2, py+190);
+
   ctx.font = '13px system-ui, sans-serif';
   ctx.fillStyle = '#9fb0c6';
   ctx.fillText('Reached Level ' + G.level + '  ·  Wave ' + G.wave + '/' + G.wavesPerLevel, W/2, py+224);
-  ctx.fillText('Robbers stopped: ' + G.stats.killed + '  ·  Magnets used: ' + G.stats.magnetsUsed, W/2, py+244);
+  ctx.fillText('Robbers stopped: ' + G.stats.killed + '  ·  Magnets used: ' + G.stats.magnetsUsed, W/2, py+248);
+
   var r = getGameOverRegions();
   var hoverMenu = pointInRect(mouse, r.menu);
   var hoverArm = pointInRect(mouse, r.armory);
+
   ctx.save();
   if (hoverMenu) { ctx.shadowColor = '#8fa0b8'; ctx.shadowBlur = 10; }
   ctx.fillStyle = hoverMenu ? 'rgba(40,52,68,0.98)' : 'rgba(20,26,38,0.95)';
@@ -2851,6 +2897,7 @@ function drawGameOver() {
   ctx.lineWidth = hoverMenu ? 2.5 : 1.5;
   roundRect(ctx, r.menu.x, r.menu.y, r.menu.w, r.menu.h, 8); ctx.stroke();
   ctx.restore();
+
   ctx.save();
   if (hoverArm) { ctx.shadowColor = '#ffe066'; ctx.shadowBlur = 10; }
   ctx.fillStyle = hoverArm ? 'rgba(52,44,20,0.98)' : 'rgba(28,24,14,0.95)';
@@ -2860,6 +2907,7 @@ function drawGameOver() {
   ctx.lineWidth = hoverArm ? 2.5 : 1.5;
   roundRect(ctx, r.armory.x, r.armory.y, r.armory.w, r.armory.h, 8); ctx.stroke();
   ctx.restore();
+
   ctx.font = 'bold 15px system-ui, sans-serif';
   ctx.fillStyle = hoverMenu ? '#ffffff' : '#c8d8ea';
   ctx.fillText('MENU  [SPACE]', r.menu.x + r.menu.w/2, r.menu.y + 26);
