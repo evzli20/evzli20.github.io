@@ -46,6 +46,11 @@
 <div id="app">
   <header>
     <h1>AR Studio</h1>
+    <span id="saveState" style="font-size:12px;color:#8e9ac0;margin-right:8px"></span>
+    <button id="btnNew">New</button>
+    <button id="btnOpen">Open</button>
+    <button id="btnSave">Save</button>
+    <input id="openFile" type="file" accept=".json,.arstudio" hidden>
     <button id="btnAR" class="primary">View in AR</button>
     <button id="btnGLB">Download GLB</button>
     <button id="btnSite">Export AR page</button>
@@ -311,10 +316,10 @@ function normalize(obj, target = 3) {
   obj.position.x -= c.x; obj.position.z -= c.z; obj.position.y -= nb.min.y;
 }
 
-function addItem(name, obj, normalizeIt = false) {
+function addItem(name, obj, normalizeIt = false, meta = {}) {
   const wrap = new THREE.Group();
   wrap.name = name;
-  wrap.userData.base = obj;
+  Object.assign(wrap.userData, meta);
   wrap.add(obj);
   if (normalizeIt) normalize(obj);
   const n = items.length;
@@ -322,25 +327,26 @@ function addItem(name, obj, normalizeIt = false) {
   scene.add(wrap);
   items.push(wrap);
   select(wrap);
+  return wrap;
 }
 
 const lib = $('#lib');
 Object.keys(LIBRARY).forEach(name => {
   const b = document.createElement('button');
   b.textContent = name;
-  b.onclick = () => addItem(name, LIBRARY[name]());
+  b.onclick = () => addItem(name, LIBRARY[name](), false, { lib: name });
   lib.appendChild(b);
 });
 
 $('#file').onchange = e => {
   const f = e.target.files[0];
   if (!f) return;
-  const url = URL.createObjectURL(f);
-  new GLTFLoader().load(url, gltf => {
-    gltf.scene.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
-    addItem(f.name.replace(/\.\w+$/, ''), gltf.scene, true);
-    URL.revokeObjectURL(url);
-  }, undefined, () => toast('Could not load that file'));
+  f.arrayBuffer().then(buf => {
+    new GLTFLoader().parse(buf, '', gltf => {
+      gltf.scene.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
+      addItem(f.name.replace(/\.\w+$/, ''), gltf.scene, true, { glb: toBase64(buf) });
+    }, () => toast('Could not load that file'));
+  });
   e.target.value = '';
 };
 
@@ -371,13 +377,17 @@ document.querySelectorAll('[data-p]').forEach(i => i.oninput = () => {
   selected[k][ax] = v;
 });
 $('#uscale').oninput = e => selected && selected.scale.setScalar(+e.target.value);
-$('#color').oninput = e => {
-  if (!selected) return;
-  selected.traverse(o => {
+function applyTint(root, hex) {
+  root.traverse(o => {
     if (!o.isMesh) return;
     if (!o.userData.own) { o.material = o.material.clone(); o.userData.own = true; }
-    o.material.color.set(e.target.value);
+    o.material.color.set(hex);
   });
+}
+$('#color').oninput = e => {
+  if (!selected) return;
+  selected.userData.tint = e.target.value;
+  applyTint(selected, e.target.value);
 };
 $('#btnDel').onclick = del;
 function del() {
@@ -494,14 +504,21 @@ let targetImg = null;
 $('#targetFile').onchange = e => {
   const f = e.target.files[0];
   if (!f) return;
-  const img = new Image();
-  img.onload = () => { targetImg = img; };
-  img.src = URL.createObjectURL(f);
-  const prev = $('#targetPrev');
-  prev.src = img.src;
-  prev.style.display = 'block';
+  const reader = new FileReader();
+  reader.onload = () => setTarget(reader.result);
+  reader.readAsDataURL(f);
   e.target.value = '';
 };
+let targetData = null;
+function setTarget(dataUrl) {
+  targetData = dataUrl;
+  const img = new Image();
+  img.onload = () => { targetImg = img; };
+  img.src = dataUrl;
+  const prev = $('#targetPrev');
+  prev.src = dataUrl;
+  prev.style.display = 'block';
+}
 
 $('#btnImgAR').onclick = async () => {
   const status = $('#imgStatus');
@@ -555,7 +572,89 @@ sc.setAttribute('mindar-image', 'imageTargetSrc: ' + blobUrl('${toBase64(mind)}'
   }
 };
 
-addItem('Tree', LIBRARY.Tree());
+// ---- saving ----
+const KEY = 'arstudio-project';
+const serialize = () => JSON.stringify({
+  v: 1,
+  size: +$('#size').value,
+  target: targetData,
+  items: items.map(i => ({
+    name: i.name, lib: i.userData.lib, glb: i.userData.glb, tint: i.userData.tint,
+    p: i.position.toArray(), r: [i.rotation.x, i.rotation.y, i.rotation.z], s: i.scale.toArray(),
+  })),
+});
+
+function clearScene() {
+  select(null);
+  items.splice(0).forEach(i => scene.remove(i));
+}
+
+function loadProject(text) {
+  const d = JSON.parse(text);
+  clearScene();
+  $('#size').value = d.size || 30;
+  $('#szv').textContent = $('#size').value;
+  if (d.target) setTarget(d.target);
+  const finish = (w, it) => {
+    w.position.fromArray(it.p);
+    w.rotation.set(...it.r);
+    w.scale.fromArray(it.s);
+    if (it.tint) { w.userData.tint = it.tint; applyTint(w, it.tint); }
+  };
+  const jobs = (d.items || []).map(it => new Promise(res => {
+    if (it.lib && LIBRARY[it.lib]) {
+      finish(addItem(it.name, LIBRARY[it.lib](), false, { lib: it.lib }), it);
+      res();
+    } else if (it.glb) {
+      const bin = atob(it.glb), u = new Uint8Array(bin.length);
+      for (let k = 0; k < bin.length; k++) u[k] = bin.charCodeAt(k);
+      new GLTFLoader().parse(u.buffer, '', gltf => {
+        gltf.scene.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
+        finish(addItem(it.name, gltf.scene, true, { glb: it.glb }), it);
+        res();
+      }, () => res());
+    } else res();
+  }));
+  return Promise.all(jobs).then(() => select(null));
+}
+
+function setSaveState(msg) { $('#saveState').textContent = msg; }
+let lastSaved = null;
+setInterval(() => {
+  const s = serialize();
+  if (s === lastSaved) return;
+  try {
+    localStorage.setItem(KEY, s);
+    lastSaved = s;
+    setSaveState('Autosaved ' + new Date().toLocaleTimeString());
+  } catch { setSaveState('Autosave failed (too large) - use Save'); }
+}, 2000);
+
+$('#btnSave').onclick = () => {
+  const name = (prompt('Project name', 'my-ar-project') || '').trim();
+  if (!name) return;
+  download(new Blob([serialize()], { type: 'application/json' }), name.replace(/[^\w-]+/g, '_') + '.arstudio.json');
+};
+$('#btnOpen').onclick = () => $('#openFile').click();
+$('#openFile').onchange = e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  f.text().then(loadProject).then(() => toast('Project opened')).catch(() => toast('Not a valid project file'));
+};
+$('#btnNew').onclick = () => {
+  if (items.length && !confirm('Clear the scene and start a new project?')) return;
+  clearScene();
+  localStorage.removeItem(KEY);
+  lastSaved = null;
+  setSaveState('');
+};
+
+const saved = localStorage.getItem(KEY);
+if (saved) {
+  loadProject(saved).then(() => { lastSaved = saved; setSaveState('Restored last session'); })
+    .catch(() => addItem('Tree', LIBRARY.Tree(), false, { lib: 'Tree' }));
+} else addItem('Tree', LIBRARY.Tree(), false, { lib: 'Tree' });
 </script>
 </body>
 </html>
