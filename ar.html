@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AR Studio</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:system-ui,sans-serif;background:#151a27;color:#e8ecf5}
+  #app{display:grid;grid-template-rows:52px 1fr;height:100%}
+  header{display:flex;align-items:center;gap:8px;padding:0 14px;background:#1d2335;border-bottom:1px solid #2c3550}
+  header h1{font-size:17px;margin:0 auto 0 0}
+  main{display:grid;grid-template-columns:190px 1fr 250px;min-height:0}
+  aside{background:#1a2030;padding:12px;overflow:auto}
+  aside h3{margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8e9ac0}
+  button,label.btn{border:0;border-radius:6px;background:#32406a;color:#fff;padding:7px 12px;cursor:pointer;font-size:13px;display:inline-block}
+  button:hover,label.btn:hover{background:#455892}
+  button.primary{background:#2f7df6}button.primary:hover{background:#4a90ff}
+  button.on{background:#2f7df6}
+  .lib{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px}
+  .lib button{padding:10px 4px}
+  #view{position:relative;min-width:0}
+  #view canvas{display:block;width:100%;height:100%}
+  #tools{position:absolute;top:10px;left:10px;display:flex;gap:4px}
+  #hint{position:absolute;bottom:10px;left:10px;font-size:12px;color:#8e9ac0}
+  .row{display:grid;grid-template-columns:58px 1fr 1fr 1fr;gap:4px;align-items:center;margin-bottom:6px;font-size:12px}
+  .row input[type=number]{width:100%;background:#10141f;border:1px solid #2c3550;color:#fff;border-radius:4px;padding:4px}
+  .field{margin:12px 0;font-size:12px}
+  .field input[type=range]{width:100%}
+  #props.off{opacity:.35;pointer-events:none}
+  #modal{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;z-index:10}
+  #modal.show{display:flex}
+  #box{width:min(720px,94vw);height:min(560px,88vh);background:#1d2335;border-radius:10px;display:flex;flex-direction:column;overflow:hidden}
+  #box .bar{display:flex;gap:8px;padding:10px;align-items:center}
+  #box .bar span{margin-right:auto;font-size:13px;color:#aab4d4}
+  model-viewer{flex:1;width:100%;background:#2a3350;--poster-color:transparent}
+  #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#2f7df6;padding:8px 16px;border-radius:6px;display:none;z-index:20}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>AR Studio</h1>
+    <button id="btnAR" class="primary">View in AR</button>
+    <button id="btnGLB">Download GLB</button>
+    <button id="btnSite">Export AR page</button>
+  </header>
+  <main>
+    <aside>
+      <h3>Add object</h3>
+      <div class="lib" id="lib"></div>
+      <label class="btn" style="width:100%;text-align:center">Upload GLB / GLTF
+        <input id="file" type="file" accept=".glb,.gltf" hidden>
+      </label>
+    </aside>
+    <div id="view">
+      <div id="tools">
+        <button data-m="translate" class="on">Move (W)</button>
+        <button data-m="rotate">Rotate (E)</button>
+        <button data-m="scale">Scale (R)</button>
+      </div>
+      <div id="hint">Click an object to select. Delete removes it. Right-drag pans.</div>
+    </div>
+    <aside>
+      <div id="props" class="off">
+        <h3 id="selName">Nothing selected</h3>
+        <div class="row"><span>Position</span><input type="number" step="0.1" data-p="position.x"><input type="number" step="0.1" data-p="position.y"><input type="number" step="0.1" data-p="position.z"></div>
+        <div class="row"><span>Rotation&deg;</span><input type="number" step="5" data-p="rotation.x"><input type="number" step="5" data-p="rotation.y"><input type="number" step="5" data-p="rotation.z"></div>
+        <div class="field">Scale <input id="uscale" type="range" min="0.1" max="4" step="0.05" value="1"></div>
+        <div class="field">Recolor all parts <input id="color" type="color" value="#ffffff"></div>
+        <button id="btnDup">Duplicate</button> <button id="btnDel">Delete</button>
+      </div>
+      <h3 style="margin-top:22px">Image AR</h3>
+      <div class="field" style="line-height:1.5">
+        Your scene appears on top of this image when a phone camera sees it.
+        <label class="btn" style="margin-top:6px">Choose target image
+          <input id="targetFile" type="file" accept="image/*" hidden>
+        </label>
+        <img id="targetPrev" style="display:none;width:100%;margin-top:8px;border-radius:6px">
+        <button id="btnImgAR" class="primary" style="margin-top:8px;width:100%">Export image AR page</button>
+        <div id="imgStatus" style="margin-top:6px;color:#8e9ac0"></div>
+      </div>
+      <h3 style="margin-top:22px">AR settings</h3>
+      <div class="field">Real-world size: <b id="szv">30</b> cm
+        <input id="size" type="range" min="5" max="200" value="30"></div>
+      <div class="field" style="color:#8e9ac0;line-height:1.5">
+        Phones: Android uses WebXR/Scene Viewer, iPhone uses AR Quick Look (converted automatically). The page must be served over HTTPS.
+      </div>
+    </aside>
+  </main>
+</div>
+<div id="modal">
+  <div id="box">
+    <div class="bar"><span>Tap the AR button on a supported phone</span>
+      <button id="launch" class="primary">Launch AR</button><button id="close">Close</button></div>
+    <model-viewer id="mv" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor" camera-controls shadow-intensity="1" touch-action="pan-y"></model-viewer>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// ---- object library ----
+function makeRnd(seed) {
+  return () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+}
+const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, flatShading: true, ...o });
+function mesh(geo, mat, x = 0, y = 0, z = 0) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  m.castShadow = m.receiveShadow = true;
+  return m;
+}
+const box = (w, h, d, mat, x, y, z) => mesh(new THREE.BoxGeometry(w, h, d), mat, x, y, z);
+
+function ice() {
+  const rnd = makeRnd(7), g = new THREE.Group();
+  g.add(box(4, 0.2, 4, std(0xbfe3f7), 0, 0.1, 0));
+  g.add(mesh(new THREE.BoxGeometry(2.6, 2.6, 2.6),
+    std(0x9fd6f5, { transparent: true, opacity: 0.55, roughness: 0.1, flatShading: false }), 0, 1.5, 0));
+  const tints = [0xeaf8ff, 0xc4ecff, 0x8fd0f2, 0x6fb8e8, 0xd8f4ff, 0xa6dcf7];
+  const geos = [
+    () => new THREE.IcosahedronGeometry(1, 0), () => new THREE.OctahedronGeometry(1, 0),
+    () => new THREE.TetrahedronGeometry(1, 0), () => new THREE.DodecahedronGeometry(1, 0),
+    () => new THREE.ConeGeometry(0.7, 1.8, 5),
+  ];
+  for (let i = 0; i < 22; i++) {
+    const mat = std(tints[Math.floor(rnd() * 6)], { transparent: true, opacity: 0.45 + rnd() * 0.4, emissive: 0x2a6a9a, emissiveIntensity: rnd() * 0.3 });
+    const b = mesh(geos[Math.floor(rnd() * 5)](), mat, (rnd() - .5) * 1.9, 1.5 + (rnd() - .5) * 1.9, (rnd() - .5) * 1.9);
+    b.scale.set(0.12 + rnd() * 0.35, 0.12 + rnd() * 0.4, 0.12 + rnd() * 0.35);
+    b.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3);
+    g.add(b);
+  }
+  const frost = std(0xf2fbff, { transparent: true, opacity: 0.85 });
+  for (let i = 0; i < 8; i++) {
+    const s = mesh(new THREE.ConeGeometry(0.1 + rnd() * 0.1, 0.4 + rnd() * 0.6, 4), frost, (rnd() - .5) * 2, 2.9, (rnd() - .5) * 2);
+    s.rotation.set((rnd() - .5) * 0.5, rnd() * 3, (rnd() - .5) * 0.5);
+    g.add(s);
+  }
+  for (let i = 0; i < 6; i++) {
+    const a = rnd() * Math.PI * 2, r = 1.9 + rnd();
+    const s = mesh(new THREE.OctahedronGeometry(0.15 + rnd() * 0.2, 0), std(tints[Math.floor(rnd() * 6)], { transparent: true, opacity: 0.8 }), Math.cos(a) * r, 0.3, Math.sin(a) * r);
+    s.scale.y = 1.2 + rnd();
+    g.add(s);
+  }
+  return g;
+}
+
+function lava() {
+  const rnd = makeRnd(7), g = new THREE.Group();
+  g.add(mesh(new THREE.CylinderGeometry(2.2, 2.5, 0.5, 16), std(0x5a3626), 0, 0.25, 0));
+  g.add(mesh(new THREE.CylinderGeometry(1.8, 1.8, 0.1, 32), std(0xff6a00, { emissive: 0xff5000, emissiveIntensity: 1.4 }), 0, 0.52, 0));
+  const crust = std(0xd23a00, { emissive: 0xaa2200, emissiveIntensity: 0.8 });
+  for (let i = 0; i < 9; i++) {
+    const a = rnd() * Math.PI * 2, r = rnd() * 1.2;
+    g.add(mesh(new THREE.CylinderGeometry(0.3 + rnd() * 0.2, 0.35, 0.08, 7), crust, Math.cos(a) * r, 0.6, Math.sin(a) * r));
+  }
+  for (let i = 0; i < 7; i++) {
+    const a = rnd() * Math.PI * 2, r = 2.7 + rnd() * 0.8;
+    g.add(mesh(new THREE.DodecahedronGeometry(0.15 + rnd() * 0.15, 0), std(0x4a2c20), Math.cos(a) * r, 0.15, Math.sin(a) * r));
+  }
+  return g;
+}
+
+function metal() {
+  const g = new THREE.Group();
+  const m = new THREE.MeshStandardMaterial({ color: 0xc9ced6, metalness: 0.9, roughness: 0.3, flatShading: true });
+  const d = new THREE.MeshStandardMaterial({ color: 0x8a919b, metalness: 0.9, roughness: 0.4, flatShading: true });
+  [[-1.1, 0.5, -0.8], [1.1, 0.5, -0.8], [-1.1, 0.5, 0.9], [1.1, 0.5, 0.9]].forEach(p => g.add(box(1.8, 1, 1.3, d, ...p)));
+  [[0, 1.5, -0.8], [0, 1.5, 0.9]].forEach(p => g.add(box(1.8, 1, 1.3, m, ...p)));
+  return g;
+}
+
+function poison() {
+  const rnd = makeRnd(7), g = new THREE.Group();
+  g.add(box(6, 0.1, 6, std(0x55582d), 0, 0.05, 0));
+  const stone = std(0x666a5a), N = 18;
+  for (let i = 0; i < N; i++) {
+    const a = i / N * Math.PI * 2;
+    const b = box(0.8, 0.8, 0.55, stone, Math.cos(a) * 2, 0.5, Math.sin(a) * 2);
+    b.rotation.y = -a + Math.PI / 2;
+    b.scale.y = 0.9 + rnd() * 0.4;
+    g.add(b);
+  }
+  g.add(mesh(new THREE.CylinderGeometry(1.8, 1.8, 0.1, 32), new THREE.MeshStandardMaterial({ color: 0x7aff1a, emissive: 0x3fbf00, emissiveIntensity: 0.9 }), 0, 0.7, 0));
+  const bm = new THREE.MeshStandardMaterial({ color: 0xe8ff9a, emissive: 0xb0ff40, emissiveIntensity: 0.8 });
+  for (let i = 0; i < 14; i++) {
+    const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 1.5;
+    g.add(mesh(new THREE.SphereGeometry(0.06 + rnd() * 0.08, 8, 8), bm, Math.cos(a) * r, 0.85, Math.sin(a) * r));
+  }
+  const pts = [];
+  for (let i = 0; i <= 10; i++) pts.push(new THREE.Vector3(Math.sin(i * 0.7) * 0.4, 0.8 + i * 0.4, Math.cos(i * 0.5) * 0.3));
+  g.add(mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, 0.45, 12),
+    new THREE.MeshStandardMaterial({ color: 0x9aff4a, emissive: 0x66cc22, emissiveIntensity: 0.4, transparent: true, opacity: 0.45 })));
+  return g;
+}
+
+function rock() {
+  const g = new THREE.Group();
+  g.add(box(4.6, 0.15, 4.6, std(0x9a9ea6), 0, 0.075, 0));
+  const light = std(0x8e939c), mid = std(0x70757f), dark = std(0x4e5461);
+  const part = (geo, mat, x, y, z, ry) => { const m = mesh(geo, mat, x, y, z); m.rotation.y = ry; g.add(m); };
+  part(new THREE.DodecahedronGeometry(1.2, 0), light, 0, 1.9, 0, 0.3);
+  part(new THREE.BoxGeometry(1.8, 1.6, 1.8), mid, 0, 1.0, 0, 0.2);
+  part(new THREE.BoxGeometry(1.3, 1.2, 1.4), light, -1.4, 0.75, 0.5, 0.4);
+  part(new THREE.BoxGeometry(1.4, 1.3, 1.4), dark, 1.3, 0.8, 0.4, -0.3);
+  part(new THREE.BoxGeometry(1, 0.8, 1), mid, 0.1, 0.55, 1.3, 0.1);
+  return g;
+}
+
+function tree() {
+  const rnd = makeRnd(7), g = new THREE.Group();
+  const greens = [0x6fc04a, 0x5aae3c, 0x4b9a33, 0x7acd55].map(c => std(c));
+  const grass = [0x6cbf45, 0x5fb03b, 0x78c852].map(c => std(c));
+  const dirt = std(0x9a7448);
+  for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) {
+    const path = (x === -1 && z === 1) || (x === -1 && z === 2) || (x === 0 && z === 1);
+    g.add(box(1, 0.3, 1, path ? dirt : grass[Math.floor(rnd() * 3)], x, 0.15, z));
+  }
+  g.add(box(0.9, 1.6, 0.9, std(0x6b4423), 0, 1.1, 0));
+  [2.2, 3, 3.8, 4.6, 5.3].forEach((y, i) => {
+    const n = [3, 3, 2, 2, 1][i];
+    for (let x = -n + 1; x < n; x++) for (let z = -n + 1; z < n; z++) {
+      if (n === 3 && Math.abs(x) === 2 && Math.abs(z) === 2) continue;
+      g.add(box(0.9, 0.9, 0.9, greens[Math.floor(rnd() * 4)], x * 0.9, y - 0.2, z * 0.9));
+    }
+  });
+  return g;
+}
+
+const prim = (geo, color, y) => () => {
+  const g = new THREE.Group();
+  g.add(mesh(geo(), std(color, { flatShading: false }), 0, y, 0));
+  return g;
+};
+
+const LIBRARY = {
+  'Ice': ice, 'Lava': lava, 'Metal': metal, 'Poison': poison, 'Rock': rock, 'Tree': tree,
+  'Cube': prim(() => new THREE.BoxGeometry(2, 2, 2), 0x4f8cff, 1),
+  'Sphere': prim(() => new THREE.SphereGeometry(1.1, 32, 24), 0xff6b6b, 1.1),
+  'Cylinder': prim(() => new THREE.CylinderGeometry(1, 1, 2, 32), 0x4fd18b, 1),
+  'Cone': prim(() => new THREE.ConeGeometry(1.1, 2.2, 32), 0xffc94f, 1.1),
+  'Torus': prim(() => new THREE.TorusGeometry(1, 0.35, 16, 48), 0xb06bff, 1.35),
+};
+// ---- end object library ----
+
+const $ = s => document.querySelector(s);
+const view = $('#view');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x232c42);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 500);
+camera.position.set(9, 8, 11);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.shadowMap.enabled = true;
+view.appendChild(renderer.domElement);
+const orbit = new OrbitControls(camera, renderer.domElement);
+orbit.enableDamping = true;
+orbit.target.set(0, 1, 0);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+sun.position.set(8, 14, 8);
+sun.castShadow = true;
+Object.assign(sun.shadow.camera, { left: -15, right: 15, top: 15, bottom: -15 });
+scene.add(sun);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.ShadowMaterial({ opacity: 0.3 }));
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor, new THREE.GridHelper(60, 60, 0x4a5880, 0x2e3856));
+
+const tc = new TransformControls(camera, renderer.domElement);
+tc.addEventListener('dragging-changed', e => orbit.enabled = !e.value);
+tc.addEventListener('objectChange', syncProps);
+scene.add(tc);
+
+const items = [];
+let selected = null;
+
+function resize() {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(toast.id);
+  toast.id = setTimeout(() => t.style.display = 'none', 2500);
+}
+
+function normalize(obj, target = 3) {
+  const b = new THREE.Box3().setFromObject(obj), s = b.getSize(new THREE.Vector3());
+  const k = target / Math.max(s.x, s.y, s.z, 1e-6);
+  obj.scale.multiplyScalar(k);
+  const nb = new THREE.Box3().setFromObject(obj), c = nb.getCenter(new THREE.Vector3());
+  obj.position.x -= c.x; obj.position.z -= c.z; obj.position.y -= nb.min.y;
+}
+
+function addItem(name, obj, normalizeIt = false) {
+  const wrap = new THREE.Group();
+  wrap.name = name;
+  wrap.userData.base = obj;
+  wrap.add(obj);
+  if (normalizeIt) normalize(obj);
+  const n = items.length;
+  wrap.position.set((n % 3) * 4 - 4, 0, Math.floor(n / 3) * 4);
+  scene.add(wrap);
+  items.push(wrap);
+  select(wrap);
+}
+
+const lib = $('#lib');
+Object.keys(LIBRARY).forEach(name => {
+  const b = document.createElement('button');
+  b.textContent = name;
+  b.onclick = () => addItem(name, LIBRARY[name]());
+  lib.appendChild(b);
+});
+
+$('#file').onchange = e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const url = URL.createObjectURL(f);
+  new GLTFLoader().load(url, gltf => {
+    gltf.scene.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
+    addItem(f.name.replace(/\.\w+$/, ''), gltf.scene, true);
+    URL.revokeObjectURL(url);
+  }, undefined, () => toast('Could not load that file'));
+  e.target.value = '';
+};
+
+function select(o) {
+  selected = o;
+  if (o) tc.attach(o); else tc.detach();
+  $('#props').classList.toggle('off', !o);
+  $('#selName').textContent = o ? o.name : 'Nothing selected';
+  syncProps();
+}
+
+function syncProps() {
+  if (!selected) return;
+  document.querySelectorAll('[data-p]').forEach(i => {
+    const [k, ax] = i.dataset.p.split('.');
+    let v = selected[k][ax];
+    if (k === 'rotation') v = THREE.MathUtils.radToDeg(v);
+    i.value = +v.toFixed(2);
+  });
+  $('#uscale').value = selected.scale.x;
+}
+
+document.querySelectorAll('[data-p]').forEach(i => i.oninput = () => {
+  if (!selected) return;
+  const [k, ax] = i.dataset.p.split('.');
+  let v = parseFloat(i.value) || 0;
+  if (k === 'rotation') v = THREE.MathUtils.degToRad(v);
+  selected[k][ax] = v;
+});
+$('#uscale').oninput = e => selected && selected.scale.setScalar(+e.target.value);
+$('#color').oninput = e => {
+  if (!selected) return;
+  selected.traverse(o => {
+    if (!o.isMesh) return;
+    if (!o.userData.own) { o.material = o.material.clone(); o.userData.own = true; }
+    o.material.color.set(e.target.value);
+  });
+};
+$('#btnDel').onclick = del;
+function del() {
+  if (!selected) return;
+  scene.remove(selected);
+  items.splice(items.indexOf(selected), 1);
+  select(null);
+}
+$('#btnDup').onclick = () => {
+  if (!selected) return;
+  const c = selected.clone();
+  c.position.x += 1; c.position.z += 1;
+  scene.add(c); items.push(c); select(c);
+};
+$('#size').oninput = e => $('#szv').textContent = e.target.value;
+
+document.querySelectorAll('#tools button').forEach(b => b.onclick = () => setMode(b.dataset.m));
+function setMode(m) {
+  tc.setMode(m);
+  document.querySelectorAll('#tools button').forEach(x => x.classList.toggle('on', x.dataset.m === m));
+}
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'w') setMode('translate');
+  if (e.key === 'e') setMode('rotate');
+  if (e.key === 'r') setMode('scale');
+  if (e.key === 'Delete' || e.key === 'Backspace') del();
+});
+
+const ray = new THREE.Raycaster();
+let down = null;
+renderer.domElement.addEventListener('pointerdown', e => down = [e.clientX, e.clientY]);
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4 || tc.dragging) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+  const hit = ray.intersectObjects(items, true)[0];
+  if (!hit) { select(null); return; }
+  let o = hit.object;
+  while (o.parent !== scene) o = o.parent;
+  select(o);
+});
+
+renderer.setAnimationLoop(() => { orbit.update(); renderer.render(scene, camera); });
+
+// ---- export ----
+function buildExportRoot(sizeM = +$('#size').value / 100) {
+  const root = new THREE.Group();
+  items.forEach(i => root.add(i.clone()));
+  const b = new THREE.Box3().setFromObject(root), s = b.getSize(new THREE.Vector3()), c = b.getCenter(new THREE.Vector3());
+  const k = sizeM / Math.max(s.x, s.y, s.z, 1e-6);
+  const out = new THREE.Group();
+  out.add(root);
+  root.position.set(-c.x, -b.min.y, -c.z);
+  out.scale.setScalar(k);
+  return out;
+}
+
+function exportGLB(sizeM) {
+  if (!items.length) { toast('Add an object first'); return Promise.reject(); }
+  tc.detach();
+  const root = buildExportRoot(sizeM);
+  return new Promise((res, rej) =>
+    new GLTFExporter().parse(root, buf => { select(selected); res(buf); }, err => { toast('Export failed'); rej(err); }, { binary: true }));
+}
+
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+$('#btnGLB').onclick = () => exportGLB().then(b => download(new Blob([b]), 'scene.glb')).catch(() => {});
+
+let mvUrl = null;
+$('#btnAR').onclick = () => exportGLB().then(b => {
+  if (mvUrl) URL.revokeObjectURL(mvUrl);
+  mvUrl = URL.createObjectURL(new Blob([b], { type: 'model/gltf-binary' }));
+  $('#mv').src = mvUrl;
+  $('#modal').classList.add('show');
+}).catch(() => {});
+$('#close').onclick = () => $('#modal').classList.remove('show');
+$('#launch').onclick = () => {
+  const mv = $('#mv');
+  if (mv.canActivateAR) mv.activateAR(); else toast('AR is not supported on this device. Open this page on a phone over HTTPS.');
+};
+
+function toBase64(buf) {
+  const u = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+$('#btnSite').onclick = () => exportGLB().then(buf => {
+  const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AR Experience</title>
+<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"><\/script>
+<style>html,body{margin:0;height:100%;background:#232c42}model-viewer{width:100%;height:100%}
+button[slot=ar-button]{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);padding:14px 26px;border:0;border-radius:30px;background:#2f7df6;color:#fff;font:600 16px system-ui}</style>
+</head><body>
+<model-viewer src="data:model/gltf-binary;base64,${toBase64(buf)}" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor" camera-controls auto-rotate shadow-intensity="1">
+<button slot="ar-button">View in your space</button>
+</model-viewer></body></html>`;
+  download(new Blob([html], { type: 'text/html' }), 'ar-experience.html');
+  toast('Host this file on any HTTPS site and open it on a phone');
+}).catch(() => {});
+
+// ---- image-tracking AR (MindAR) ----
+let targetImg = null;
+$('#targetFile').onchange = e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const img = new Image();
+  img.onload = () => { targetImg = img; };
+  img.src = URL.createObjectURL(f);
+  const prev = $('#targetPrev');
+  prev.src = img.src;
+  prev.style.display = 'block';
+  e.target.value = '';
+};
+
+$('#btnImgAR').onclick = async () => {
+  const status = $('#imgStatus');
+  if (!targetImg) { toast('Choose a target image first'); return; }
+  if (!items.length) { toast('Add an object first'); return; }
+  try {
+    status.textContent = 'Loading tracker...';
+    const { Compiler } = await import('https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js');
+    status.textContent = 'Analysing image... 0%';
+    const compiler = new Compiler();
+    await compiler.compileImageTargets([targetImg], p => status.textContent = 'Analysing image... ' + Math.round(p) + '%');
+    const mind = await compiler.exportData();
+    status.textContent = 'Building page...';
+    const glb = await exportGLB(1);
+    const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Image AR</title>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"><\/script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"><\/script>
+<style>html,body{margin:0;height:100%;overflow:hidden}</style>
+</head><body>
+<a-scene id="sc" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+  <a-assets><a-asset-item id="model"></a-asset-item></a-assets>
+  <a-light type="ambient" intensity="1.2"></a-light>
+  <a-light type="directional" intensity="1.5" position="1 2 1"></a-light>
+  <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+  <a-entity mindar-image-target="targetIndex: 0">
+    <a-gltf-model rotation="90 0 0" position="0 0 0" src="#model"></a-gltf-model>
+  </a-entity>
+</a-scene>
+<script>
+function blobUrl(b64, type) {
+  const bin = atob(b64), u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([u], { type }));
+}
+const sc = document.getElementById('sc');
+document.getElementById('model').setAttribute('src', blobUrl('${toBase64(glb)}', 'model/gltf-binary'));
+sc.setAttribute('mindar-image', 'imageTargetSrc: ' + blobUrl('${toBase64(mind)}', 'application/octet-stream') + '; autoStart: true;');
+<\/script>
+</body></html>`;
+    download(new Blob([html], { type: 'text/html' }), 'image-ar.html');
+    status.textContent = 'Done. Host image-ar.html on HTTPS, open it on a phone, and point the camera at your image.';
+  } catch (err) {
+    console.error(err);
+    status.textContent = 'Failed: ' + (err && err.message || err);
+  }
+};
+
+addItem('Tree', LIBRARY.Tree());
+</script>
+</body>
+</html>
