@@ -87,7 +87,8 @@
           <input id="targetFile" type="file" accept="image/*" hidden>
         </label>
         <img id="targetPrev" style="display:none;width:100%;margin-top:8px;border-radius:6px">
-        <button id="btnImgAR" class="primary" style="margin-top:8px;width:100%">Export image AR page</button>
+        <button id="btnImgLaunch" class="primary" style="margin-top:8px;width:100%">Launch image AR here</button>
+        <button id="btnImgAR" style="margin-top:6px;width:100%">Export image AR page</button>
         <div id="imgStatus" style="margin-top:6px;color:#8e9ac0"></div>
       </div>
       <h3 style="margin-top:22px">AR settings</h3>
@@ -509,9 +510,10 @@ $('#targetFile').onchange = e => {
   reader.readAsDataURL(f);
   e.target.value = '';
 };
-let targetData = null;
-function setTarget(dataUrl) {
+let targetData = null, targetMind = null;
+function setTarget(dataUrl, mind = null) {
   targetData = dataUrl;
+  targetMind = mind;
   const img = new Image();
   img.onload = () => { targetImg = img; };
   img.src = dataUrl;
@@ -520,17 +522,28 @@ function setTarget(dataUrl) {
   prev.style.display = 'block';
 }
 
-$('#btnImgAR').onclick = async () => {
+$('#btnImgAR').onclick = () => runImageAR(html => {
+  download(new Blob([html], { type: 'text/html' }), 'image-ar.html');
+  $('#imgStatus').textContent = 'Done. Host image-ar.html on HTTPS, open it on a phone, and point the camera at your image.';
+});
+$('#btnImgLaunch').onclick = () => runImageAR(html => {
+  location.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+});
+
+async function runImageAR(deliver) {
   const status = $('#imgStatus');
   if (!targetImg) { toast('Choose a target image first'); return; }
   if (!items.length) { toast('Add an object first'); return; }
   try {
-    status.textContent = 'Loading tracker...';
-    const { Compiler } = await import('https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js');
-    status.textContent = 'Analysing image... 0%';
-    const compiler = new Compiler();
-    await compiler.compileImageTargets([targetImg], p => status.textContent = 'Analysing image... ' + Math.round(p) + '%');
-    const mind = await compiler.exportData();
+    if (!targetMind) {
+      status.textContent = 'Loading tracker...';
+      const { Compiler } = await import('https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js');
+      status.textContent = 'Analysing image... 0%';
+      const compiler = new Compiler();
+      await compiler.compileImageTargets([targetImg], p => status.textContent = 'Analysing image... ' + Math.round(p) + '%');
+      targetMind = toBase64(await compiler.exportData());
+    }
+    const mindB64 = targetMind;
     status.textContent = 'Building page...';
     const glb = await exportGLB(1);
     const html = `<!DOCTYPE html>
@@ -561,16 +574,15 @@ const obj = document.getElementById('obj');
 target.addEventListener('targetFound', () => obj.setAttribute('visible', true));
 target.addEventListener('targetLost', () => obj.setAttribute('visible', false));
 document.getElementById('model').setAttribute('src', blobUrl('${toBase64(glb)}', 'model/gltf-binary'));
-sc.setAttribute('mindar-image', 'imageTargetSrc: ' + blobUrl('${toBase64(mind)}', 'application/octet-stream') + '; autoStart: true;');
+sc.setAttribute('mindar-image', 'imageTargetSrc: ' + blobUrl('${mindB64}', 'application/octet-stream') + '; autoStart: true;');
 <\/script>
 </body></html>`;
-    download(new Blob([html], { type: 'text/html' }), 'image-ar.html');
-    status.textContent = 'Done. Host image-ar.html on HTTPS, open it on a phone, and point the camera at your image.';
+    deliver(html);
   } catch (err) {
     console.error(err);
     status.textContent = 'Failed: ' + (err && err.message || err);
   }
-};
+}
 
 // ---- saving ----
 const KEY = 'arstudio-project';
@@ -578,6 +590,7 @@ const serialize = () => JSON.stringify({
   v: 1,
   size: +$('#size').value,
   target: targetData,
+  mind: targetMind,
   items: items.map(i => ({
     name: i.name, lib: i.userData.lib, glb: i.userData.glb, tint: i.userData.tint,
     p: i.position.toArray(), r: [i.rotation.x, i.rotation.y, i.rotation.z], s: i.scale.toArray(),
@@ -594,7 +607,7 @@ function loadProject(text) {
   clearScene();
   $('#size').value = d.size || 30;
   $('#szv').textContent = $('#size').value;
-  if (d.target) setTarget(d.target);
+  if (d.target) setTarget(d.target, d.mind || null);
   const finish = (w, it) => {
     w.position.fromArray(it.p);
     w.rotation.set(...it.r);
