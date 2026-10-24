@@ -528,8 +528,8 @@ $('#btnImgAR').onclick = async () => {
   <a-light type="ambient" intensity="1.2"></a-light>
   <a-light type="directional" intensity="1.5" position="1 2 1"></a-light>
   <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-  <a-entity mindar-image-target="targetIndex: 0">
-    <a-gltf-model rotation="90 0 0" position="0 0 0" src="#model"></a-gltf-model>
+  <a-entity id="target" mindar-image-target="targetIndex: 0">
+    <a-gltf-model id="obj" visible="false" rotation="90 0 0" position="0 0 0" src="#model"></a-gltf-model>
   </a-entity>
 </a-scene>
 <script>
@@ -539,6 +539,10 @@ function blobUrl(b64, type) {
   return URL.createObjectURL(new Blob([u], { type }));
 }
 const sc = document.getElementById('sc');
+const target = document.getElementById('target');
+const obj = document.getElementById('obj');
+target.addEventListener('targetFound', () => obj.setAttribute('visible', true));
+target.addEventListener('targetLost', () => obj.setAttribute('visible', false));
 document.getElementById('model').setAttribute('src', blobUrl('${toBase64(glb)}', 'model/gltf-binary'));
 sc.setAttribute('mindar-image', 'imageTargetSrc: ' + blobUrl('${toBase64(mind)}', 'application/octet-stream') + '; autoStart: true;');
 <\/script>
