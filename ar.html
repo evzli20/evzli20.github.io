@@ -47,6 +47,7 @@
   <header>
     <h1>AR Studio</h1>
     <span id="saveState" style="font-size:12px;color:#8e9ac0;margin-right:8px"></span>
+    <button id="btnLock" title="Encrypt saved projects so they need a password to open">Password: off</button>
     <button id="btnNew">New</button>
     <button id="btnOpen">Open</button>
     <button id="btnSave">Save</button>
@@ -578,8 +579,13 @@ function blobUrl(b64, type) {
 const sc = document.getElementById('sc');
 const target = document.getElementById('target');
 const obj = document.getElementById('obj');
-target.addEventListener('targetFound', () => obj.setAttribute('visible', true));
-target.addEventListener('targetLost', () => obj.setAttribute('visible', false));
+let found = false;
+target.addEventListener('targetFound', () => { found = true; });
+target.addEventListener('targetLost', () => { found = false; });
+AFRAME.registerComponent('gate', {
+  tick() { this.el.object3D.visible = found && target.object3D.visible; }
+});
+obj.setAttribute('gate', '');
 function fail(msg) {
   const d = document.createElement('div');
   d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#151a27;color:#fff;font:16px/1.5 system-ui;padding:28px;display:flex;align-items:center;text-align:center';
@@ -695,29 +701,92 @@ function loadProject(text) {
   return Promise.all(jobs).then(() => select(null));
 }
 
+// ---- password lock (AES-GCM, key from PBKDF2) ----
+const fromBase64 = b => Uint8Array.from(atob(b), c => c.charCodeAt(0));
+let password = null, lockSalt = null, lockKey = null, autosavePaused = false;
+
+async function deriveKey(pw, salt) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' }, base,
+    { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function setPassword(pw) {
+  password = pw || null;
+  if (password) {
+    lockSalt = crypto.getRandomValues(new Uint8Array(16));
+    lockKey = await deriveKey(password, lockSalt);
+  } else lockSalt = lockKey = null;
+  $('#btnLock').textContent = password ? 'Password: on' : 'Password: off';
+  $('#btnLock').classList.toggle('on', !!password);
+  lastSaved = null;
+}
+async function lockText(text) {
+  if (!password) return text;
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, lockKey, new TextEncoder().encode(text));
+  return JSON.stringify({ arstudioLocked: 1, salt: toBase64(lockSalt), iv: toBase64(iv), data: toBase64(ct) });
+}
+const isLocked = text => { try { return JSON.parse(text).arstudioLocked === 1; } catch { return false; } };
+async function unlockText(text, pw) {
+  const d = JSON.parse(text);
+  const key = await deriveKey(pw, fromBase64(d.salt));
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromBase64(d.iv) }, key, fromBase64(d.data));
+  return new TextDecoder().decode(pt);
+}
+async function askAndUnlock(text) {
+  for (;;) {
+    const pw = prompt('This project is password protected. Enter the password:');
+    if (pw === null) return null;
+    try {
+      const plain = await unlockText(text, pw);
+      await setPassword(pw);
+      return plain;
+    } catch { toast('Wrong password'); }
+  }
+}
+
+$('#btnLock').onclick = async () => {
+  const pw = prompt(password ? 'New password (leave empty to turn the password off):' : 'Set a password. Saved projects will need it to open:');
+  if (pw === null) return;
+  await setPassword(pw);
+  autosavePaused = false;
+  toast(password ? 'Password on. Saved projects are now encrypted.' : 'Password off');
+};
+
 function setSaveState(msg) { $('#saveState').textContent = msg; }
-let lastSaved = null;
-setInterval(() => {
+let lastSaved = null, saving = false;
+setInterval(async () => {
+  if (autosavePaused || saving) return;
   const s = serialize();
   if (s === lastSaved) return;
+  saving = true;
   try {
-    localStorage.setItem(KEY, s);
+    localStorage.setItem(KEY, await lockText(s));
     lastSaved = s;
-    setSaveState('Autosaved ' + new Date().toLocaleTimeString());
+    setSaveState('Autosaved ' + new Date().toLocaleTimeString() + (password ? ' (locked)' : ''));
   } catch { setSaveState('Autosave failed (too large) - use Save'); }
+  saving = false;
 }, 2000);
 
-$('#btnSave').onclick = () => {
+$('#btnSave').onclick = async () => {
   const name = (prompt('Project name', 'my-ar-project') || '').trim();
   if (!name) return;
-  download(new Blob([serialize()], { type: 'application/json' }), name.replace(/[^\w-]+/g, '_') + '.arstudio.json');
+  download(new Blob([await lockText(serialize())], { type: 'application/json' }), name.replace(/[^\w-]+/g, '_') + '.arstudio.json');
 };
 $('#btnOpen').onclick = () => $('#openFile').click();
-$('#openFile').onchange = e => {
+$('#openFile').onchange = async e => {
   const f = e.target.files[0];
   e.target.value = '';
   if (!f) return;
-  f.text().then(loadProject).then(() => toast('Project opened')).catch(() => toast('Not a valid project file'));
+  try {
+    let text = await f.text();
+    if (isLocked(text)) {
+      text = await askAndUnlock(text);
+      if (text === null) return;
+    }
+    await loadProject(text);
+    toast('Project opened');
+  } catch { toast('Not a valid project file'); }
 };
 $('#btnNew').onclick = () => {
   if (items.length && !confirm('Clear the scene and start a new project?')) return;
@@ -727,11 +796,21 @@ $('#btnNew').onclick = () => {
   setSaveState('');
 };
 
-const saved = localStorage.getItem(KEY);
-if (saved) {
-  loadProject(saved).then(() => { lastSaved = saved; setSaveState('Restored last session'); })
-    .catch(() => addItem('Tree', LIBRARY.Tree(), false, { lib: 'Tree' }));
-} else addItem('Tree', LIBRARY.Tree(), false, { lib: 'Tree' });
+const startFresh = () => addItem('Tree', LIBRARY.Tree(), false, { lib: 'Tree' });
+(async () => {
+  const saved = localStorage.getItem(KEY);
+  if (!saved) { startFresh(); return; }
+  try {
+    let plain = saved;
+    if (isLocked(saved)) {
+      plain = await askAndUnlock(saved);
+      if (plain === null) { autosavePaused = true; setSaveState('Locked - autosave paused'); startFresh(); return; }
+    }
+    await loadProject(plain);
+    lastSaved = plain;
+    setSaveState('Restored last session');
+  } catch { startFresh(); }
+})();
 </script>
 </body>
 </html>
