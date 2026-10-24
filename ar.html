@@ -90,6 +90,14 @@
         <button id="btnImgLaunch" class="primary" style="margin-top:8px;width:100%">Launch image AR here</button>
         <button id="btnImgAR" style="margin-top:6px;width:100%">Export image AR page</button>
         <div id="imgStatus" style="margin-top:6px;color:#8e9ac0"></div>
+        <div style="margin-top:14px;border-top:1px solid #2c3550;padding-top:10px">
+          <b>QR card</b><br>
+          Link to your hosted AR page:
+          <input id="pageUrl" type="url" placeholder="https://yoursite.com/image-ar.html" style="width:100%;margin-top:4px;background:#10141f;border:1px solid #2c3550;color:#fff;border-radius:4px;padding:6px">
+          <button id="btnQR" style="margin-top:6px;width:100%">Make QR + image card</button>
+          <canvas id="cardPrev" style="display:none;width:100%;margin-top:8px;border-radius:6px"></canvas>
+          <button id="btnCardDl" style="display:none;margin-top:6px;width:100%">Download card (PNG)</button>
+        </div>
       </div>
       <h3 style="margin-top:22px">AR settings</h3>
       <div class="field">Real-world size: <b id="szv">30</b> cm
@@ -554,12 +562,11 @@ async function runImageAR(deliver) {
 <style>html,body{margin:0;height:100%;overflow:hidden}</style>
 </head><body>
 <a-scene id="sc" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
-  <a-assets><a-asset-item id="model"></a-asset-item></a-assets>
   <a-light type="ambient" intensity="1.2"></a-light>
   <a-light type="directional" intensity="1.5" position="1 2 1"></a-light>
   <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
   <a-entity id="target" mindar-image-target="targetIndex: 0">
-    <a-gltf-model id="obj" visible="false" rotation="90 0 0" position="0 0 0" src="#model"></a-gltf-model>
+    <a-entity id="obj" visible="false" rotation="90 0 0" position="0 0 0"></a-entity>
   </a-entity>
 </a-scene>
 <script>
@@ -573,8 +580,19 @@ const target = document.getElementById('target');
 const obj = document.getElementById('obj');
 target.addEventListener('targetFound', () => obj.setAttribute('visible', true));
 target.addEventListener('targetLost', () => obj.setAttribute('visible', false));
-document.getElementById('model').setAttribute('src', blobUrl('${toBase64(glb)}', 'model/gltf-binary'));
-sc.setAttribute('mindar-image', 'imageTargetSrc: ' + blobUrl('${mindB64}', 'application/octet-stream') + '; autoStart: true;');
+function fail(msg) {
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#151a27;color:#fff;font:16px/1.5 system-ui;padding:28px;display:flex;align-items:center;text-align:center';
+  d.textContent = msg;
+  document.body.appendChild(d);
+}
+if (!window.isSecureContext || !navigator.mediaDevices) {
+  fail('The camera is blocked because this page was opened as a local file. Upload this file to an HTTPS website (e.g. GitHub Pages or Netlify) and open that link on your phone.');
+} else {
+  obj.setAttribute('gltf-model', blobUrl('${toBase64(glb)}', 'model/gltf-binary'));
+  sc.setAttribute('mindar-image', 'imageTargetSrc: ' + blobUrl('${mindB64}', 'application/octet-stream') + '; autoStart: true;');
+  sc.addEventListener('arError', () => fail('Could not start the camera. Allow camera access for this site and reload.'));
+}
 <\/script>
 </body></html>`;
     deliver(html);
@@ -583,6 +601,52 @@ sc.setAttribute('mindar-image', 'imageTargetSrc: ' + blobUrl('${mindB64}', 'appl
     status.textContent = 'Failed: ' + (err && err.message || err);
   }
 }
+
+// ---- QR card ----
+$('#pageUrl').value = localStorage.getItem('arstudio-url') || '';
+$('#btnQR').onclick = async () => {
+  const url = $('#pageUrl').value.trim();
+  if (!targetImg) { toast('Choose a target image first'); return; }
+  if (!/^https:\/\//i.test(url)) { toast('Enter the https:// link to your hosted AR page'); return; }
+  localStorage.setItem('arstudio-url', url);
+  try {
+    const { default: qrcode } = await import('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/+esm');
+    const qr = qrcode(0, 'M');
+    qr.addData(url);
+    qr.make();
+    const W = 1000, pad = 50, imgW = W - pad * 2;
+    const imgH = Math.round(imgW * targetImg.naturalHeight / targetImg.naturalWidth);
+    const qrSize = 340, footer = qrSize + pad * 2;
+    const c = $('#cardPrev');
+    c.width = W;
+    c.height = pad + imgH + footer;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(targetImg, pad, pad, imgW, imgH);
+    const n = qr.getModuleCount(), quiet = 4, cell = Math.floor(qrSize / (n + quiet * 2));
+    const qx = pad, qy = pad + imgH + pad;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(qx, qy, cell * (n + quiet * 2), cell * (n + quiet * 2));
+    ctx.fillStyle = '#000';
+    for (let r = 0; r < n; r++) for (let k = 0; k < n; k++)
+      if (qr.isDark(r, k)) ctx.fillRect(qx + (k + quiet) * cell, qy + (r + quiet) * cell, cell, cell);
+    ctx.fillStyle = '#222';
+    ctx.font = '600 38px system-ui, sans-serif';
+    ctx.textBaseline = 'top';
+    const tx = qx + cell * (n + quiet * 2) + 40;
+    ctx.fillText('1. Scan the QR code', tx, qy + 30);
+    ctx.fillText('2. Allow the camera', tx, qy + 90);
+    ctx.fillText('3. Point it at the', tx, qy + 150);
+    ctx.fillText('    image above', tx, qy + 200);
+    c.style.display = 'block';
+    $('#btnCardDl').style.display = 'block';
+  } catch (err) {
+    console.error(err);
+    toast('Could not make the QR code');
+  }
+};
+$('#btnCardDl').onclick = () => $('#cardPrev').toBlob(b => download(b, 'ar-card.png'));
 
 // ---- saving ----
 const KEY = 'arstudio-project';
