@@ -103,6 +103,16 @@
         <button id="btnImgAR" style="margin-top:6px;width:100%">Export image AR page</button>
         <div id="imgStatus" style="margin-top:6px;color:#8e9ac0"></div>
         <div style="margin-top:14px;border-top:1px solid #2c3550;padding-top:10px">
+          <b>Publish online (GitHub Pages)</b><br>
+          One click puts the AR page on the web and fills in the QR link below.
+          <input id="ghUser" placeholder="GitHub username" style="width:100%;margin-top:4px;background:#10141f;border:1px solid #2c3550;color:#fff;border-radius:4px;padding:6px">
+          <input id="ghRepo" placeholder="Repository (e.g. ar-testing)" style="width:100%;margin-top:4px;background:#10141f;border:1px solid #2c3550;color:#fff;border-radius:4px;padding:6px">
+          <input id="ghToken" type="password" placeholder="Access token" autocomplete="off" style="width:100%;margin-top:4px;background:#10141f;border:1px solid #2c3550;color:#fff;border-radius:4px;padding:6px">
+          <label style="display:block;margin-top:4px"><input id="ghRemember" type="checkbox"> Remember on this device</label>
+          <button id="btnPublish" class="primary" style="margin-top:6px;width:100%">Publish online</button>
+          <div id="pubStatus" style="margin-top:6px;color:#8e9ac0;word-break:break-all"></div>
+        </div>
+        <div style="margin-top:14px;border-top:1px solid #2c3550;padding-top:10px">
           <b>QR card</b><br>
           Link to your hosted AR page:
           <input id="pageUrl" type="url" placeholder="https://yoursite.com/image-ar.html" style="width:100%;margin-top:4px;background:#10141f;border:1px solid #2c3550;color:#fff;border-radius:4px;padding:6px">
@@ -664,6 +674,13 @@ function showStart(note) {
   b.onclick = startAR;
   d.appendChild(p);
   d.appendChild(b);
+  if (inApp && !isIOS && location.protocol === 'https:') {
+    const a = document.createElement('a');
+    a.textContent = 'Open in Chrome';
+    a.href = 'intent://' + location.host + location.pathname + location.search + '#Intent;scheme=https;package=com.android.chrome;end';
+    a.style.cssText = 'padding:14px 28px;border-radius:30px;background:#fff;color:#151a27;font:600 17px system-ui;text-decoration:none';
+    d.appendChild(a);
+  }
   document.body.appendChild(d);
 }
 
@@ -680,8 +697,9 @@ function explain(err) {
 
 async function startAR() {
   if (inApp) { showStart('This page is open inside another app, which blocks the camera. Open the link in Chrome (Android) or Safari (iPhone) instead.'); return; }
-  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showStart('The camera only works on secure (https://) pages. This page is at "' + location.protocol + '//". Upload it to an HTTPS host such as Netlify or GitHub Pages and open that link.');
+  const okHost = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  if (!okHost || !window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showStart('You opened this page as a file on your phone (' + location.protocol + '//), so the browser cannot ask for camera permission. Upload this file to a website (GitHub Pages or Netlify) and open the https:// link in Chrome instead.');
     return;
   }
   try {
@@ -708,8 +726,86 @@ showStart();
   }
 }
 
+let currentId = null, currentName = '';
+
+// ---- publish to GitHub Pages ----
+{
+  const saved = JSON.parse(localStorage.getItem('arstudio-gh') || '{}');
+  $('#ghUser').value = saved.user || '';
+  $('#ghRepo').value = saved.repo || '';
+  $('#ghToken').value = saved.token || '';
+  $('#ghRemember').checked = !!saved.token;
+}
+const cleanUser = v => v.trim().replace(/^https?:\/\//i, '').replace(/\.github\.io.*$/i, '').replace(/^@/, '').split('/')[0];
+async function gh(token, path, opts = {}) {
+  const r = await fetch('https://api.github.com' + path, {
+    ...opts,
+    headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+  });
+  const body = await r.json().catch(() => ({}));
+  return { r, body };
+}
+$('#btnPublish').onclick = () => {
+  const user = cleanUser($('#ghUser').value), repo = repoName(), token = $('#ghToken').value.trim();
+  $('#ghUser').value = user;
+  const st = $('#pubStatus');
+  if (!user || !token) { toast('Enter your GitHub username and access token'); return; }
+  if (!/^[\w.-]+$/.test(user) || !/^[\w.-]+$/.test(repo)) { toast('Username and repository can only use letters, numbers, - _ .'); return; }
+  localStorage.setItem('arstudio-gh', JSON.stringify($('#ghRemember').checked ? { user, repo: $('#ghRepo').value.trim(), token } : { user, repo: $('#ghRepo').value.trim() }));
+  runImageAR(async html => {
+    try {
+      st.textContent = 'Checking repository...';
+      let { r } = await gh(token, `/repos/${user}/${repo}`);
+      if (r.status === 401) throw new Error('GitHub rejected the token. Check it and that it can edit this repository.');
+      if (r.status === 404) {
+        st.textContent = 'Creating repository...';
+        const c = await gh(token, '/user/repos', { method: 'POST', body: JSON.stringify({ name: repo, description: 'AR Studio pages', auto_init: true }) });
+        if (!c.r.ok) throw new Error(`Repository "${user}/${repo}" was not found, or this token has no access to it, and a token limited to selected repositories cannot create one. Create a public repository named "${repo}" on GitHub (tick "Add a README"), then edit the token and under Repository access select that repository.  (GitHub said: ${c.body.message || c.r.status})`);
+      } else if (!r.ok) throw new Error(`Could not read the repository (${r.status}). Check the username and repository name.`);
+      const slug = repo;
+      const path = 'index.html';
+      st.textContent = 'Uploading...';
+      const existing = await gh(token, `/repos/${user}/${repo}/contents/${path}`);
+      const put = await gh(token, `/repos/${user}/${repo}/contents/${path}`, {
+        method: 'PUT',
+        body: JSON.stringify({ message: 'Publish ' + slug, content: toBase64(new TextEncoder().encode(html).buffer), sha: existing.r.ok ? existing.body.sha : undefined }),
+      });
+      if (put.r.status === 403 || put.r.status === 404) throw new Error('GitHub would not let this token upload files. Edit the token and set Repository permissions > Contents to "Read and write", and make sure this repository is selected under Repository access.');
+      if (!put.r.ok) throw new Error(put.body.message || 'Upload failed');
+      const pg = await gh(token, `/repos/${user}/${repo}/pages`, { method: 'POST', body: JSON.stringify({ source: { branch: 'main', path: '/' } }) });
+      const pagesOk = pg.r.ok || pg.r.status === 409;
+      const url = `https://${user}.github.io/${repo}/index.html`;
+      $('#pageUrl').value = url;
+      localStorage.setItem('arstudio-url', url);
+      st.textContent = 'Uploaded: ' + url + (pagesOk
+        ? ' (it can take 1-2 minutes to go live the first time). The QR link below is filled in.'
+        : ' - but the token could not switch on GitHub Pages. On GitHub open the repository > Settings > Pages > Deploy from branch > main / root > Save, then wait 1-2 minutes. The QR link below is filled in.');
+    } catch (err) {
+      console.error(err);
+      st.textContent = 'Failed: ' + (err && err.message || err);
+    }
+  });
+};
+
 // ---- QR card ----
 $('#pageUrl').value = localStorage.getItem('arstudio-url') || '';
+const projSlug = () => (currentName || 'my-first-project').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'my-first-project';
+function suggestUrl() {
+  const user = cleanUser($('#ghUser').value);
+  return user ? `https://${user}.github.io/${repoName()}/index.html` : '';
+}
+function refreshSuggestion() {
+  const s = suggestUrl();
+  $('#pageUrl').placeholder = s || 'https://github-name.github.io/my-first-project/index.html';
+  const cur = $('#pageUrl').value.trim();
+  if (s && (!cur || cur === lastSuggested)) $('#pageUrl').value = s;
+  lastSuggested = s;
+}
+let lastSuggested = '';
+const repoName = () => $('#ghRepo').value.trim().replace(/^\/+|\/+$/g, '') || projSlug();
+['#ghUser', '#ghRepo'].forEach(id => $(id).addEventListener('input', refreshSuggestion));
+setInterval(refreshSuggestion, 1500);
+refreshSuggestion();
 $('#btnQR').onclick = async () => {
   const url = $('#pageUrl').value.trim();
   if (!targetImg) { toast('Choose a target image first'); return; }
@@ -876,7 +972,7 @@ const dbGet = id => dbTx('readonly', s => s.get(id));
 const dbAll = () => dbTx('readonly', s => s.getAll());
 const dbDel = id => dbTx('readwrite', s => s.delete(id));
 
-let currentId = null, currentName = '', lastSaved = null, saving = false;
+let lastSaved = null, saving = false;
 const CUR = 'arstudio-current';
 
 function showName() { $('#projName').textContent = currentName ? '• ' + currentName : ''; }
