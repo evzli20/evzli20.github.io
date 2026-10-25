@@ -253,6 +253,41 @@ function tree() {
   return g;
 }
 
+function crystal() {
+  const rnd = makeRnd(11), g = new THREE.Group();
+  const baseDark = std(0x2e1a5c), baseMid = std(0x432680);
+  const glow = std(0xa23cf0, { emissive: 0x7a1fd0, emissiveIntensity: 0.9 });
+  // blocky base
+  [[0, 0.3, 0, 3.2, 0.6, 3.0], [-1.9, 0.2, 0.6, 1.0, 0.4, 1.0], [1.9, 0.25, 0.4, 0.9, 0.5, 0.9],
+   [0.2, 0.15, 1.9, 1.6, 0.3, 1.0], [-0.6, 0.15, -1.9, 1.2, 0.3, 0.8]]
+    .forEach(([x, y, z, w, h, d], i) => g.add(box(w, h, d, i % 2 ? baseDark : baseMid, x, y, z)));
+  g.add(box(2.8, 0.08, 2.6, glow, 0, 0.64, 0));
+  // hexagonal crystal
+  const crystalMat = std(0x9b45e8, { transparent: true, opacity: 0.8, emissive: 0x6a1ab8, emissiveIntensity: 0.7 });
+  const edgeMat = std(0xd9a0ff, { emissive: 0xb060ff, emissiveIntensity: 0.9 });
+  const body = mesh(new THREE.CylinderGeometry(0.8, 0.8, 2.6, 6), crystalMat, 0, 2.5, 0);
+  const top = mesh(new THREE.ConeGeometry(0.8, 1.5, 6), crystalMat, 0, 4.55, 0);
+  const bot = mesh(new THREE.ConeGeometry(0.8, 1.2, 6), crystalMat, 0, 1.0, 0);
+  bot.rotation.x = Math.PI;
+  const cg = new THREE.Group();
+  cg.add(body, top, bot);
+  [body, top, bot].forEach(m => {
+    const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry),
+      new THREE.LineBasicMaterial({ color: 0xe6b8ff }));
+    e.position.copy(m.position);
+    e.rotation.copy(m.rotation);
+    cg.add(e);
+  });
+  g.add(cg);
+  // floating pixel particles
+  for (let i = 0; i < 18; i++) {
+    const s = 0.07 + rnd() * 0.08;
+    g.add(mesh(new THREE.BoxGeometry(s, s, s), edgeMat,
+      (rnd() - .5) * 5, 0.8 + rnd() * 4.5, (rnd() - .5) * 5));
+  }
+  return g;
+}
+
 const prim = (geo, color, y) => () => {
   const g = new THREE.Group();
   g.add(mesh(geo(), std(color, { flatShading: false }), 0, y, 0));
@@ -260,7 +295,7 @@ const prim = (geo, color, y) => () => {
 };
 
 const LIBRARY = {
-  'Ice': ice, 'Lava': lava, 'Metal': metal, 'Poison': poison, 'Rock': rock, 'Tree': tree,
+  'Ice': ice, 'Lava': lava, 'Metal': metal, 'Poison': poison, 'Rock': rock, 'Tree': tree, 'Crystal': crystal,
   'Cube': prim(() => new THREE.BoxGeometry(2, 2, 2), 0x4f8cff, 1),
   'Sphere': prim(() => new THREE.SphereGeometry(1.1, 32, 24), 0xff6b6b, 1.1),
   'Cylinder': prim(() => new THREE.CylinderGeometry(1, 1, 2, 32), 0x4fd18b, 1),
