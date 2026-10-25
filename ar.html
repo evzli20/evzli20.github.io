@@ -34,6 +34,17 @@
   #box .bar{display:flex;gap:8px;padding:10px;align-items:center}
   #box .bar span{margin-right:auto;font-size:13px;color:#aab4d4}
   model-viewer{flex:1;width:100%;background:#2a3350;--poster-color:transparent}
+  #pmodal{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;z-index:10}
+  #pmodal.show{display:flex}
+  #pbox{width:min(560px,94vw);max-height:80vh;background:#1d2335;border-radius:10px;display:flex;flex-direction:column;overflow:hidden}
+  #pbox .bar{display:flex;gap:8px;padding:12px;align-items:center}
+  #pbox .bar span{margin-right:auto;font-size:13px;color:#aab4d4}
+  #plist{overflow:auto;padding:0 12px 12px}
+  .prow{display:flex;gap:6px;align-items:center;padding:8px;border-radius:6px;background:#242c44;margin-bottom:6px}
+  .prow.cur{outline:2px solid #2f7df6}
+  .pinfo{margin-right:auto;min-width:0;display:flex;flex-direction:column}
+  .pinfo b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pinfo small{color:#8e9ac0}
   #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#2f7df6;padding:8px 16px;border-radius:6px;display:none;z-index:20}
 </style>
 <script type="importmap">
@@ -45,12 +56,12 @@
 <body>
 <div id="app">
   <header>
-    <h1>AR Studio</h1>
+    <h1>AR Studio <span id="projName" style="font-weight:400;font-size:13px;color:#8e9ac0"></span></h1>
     <span id="saveState" style="font-size:12px;color:#8e9ac0;margin-right:8px"></span>
     <button id="btnLock" title="Encrypt saved projects so they need a password to open">Password: off</button>
-    <button id="btnNew">New</button>
-    <button id="btnOpen">Open</button>
-    <button id="btnSave">Save</button>
+    <button id="btnProjects">Projects</button>
+    <button id="btnOpen" title="Import a project file from your device">Import</button>
+    <button id="btnSave" title="Download this project as a file">Export file</button>
     <input id="openFile" type="file" accept=".json,.arstudio" hidden>
     <button id="btnAR" class="primary">View in AR</button>
     <button id="btnGLB">Download GLB</button>
@@ -114,6 +125,13 @@
     <div class="bar"><span>Tap the AR button on a supported phone</span>
       <button id="launch" class="primary">Launch AR</button><button id="close">Close</button></div>
     <model-viewer id="mv" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor" camera-controls shadow-intensity="1" touch-action="pan-y"></model-viewer>
+  </div>
+</div>
+<div id="pmodal">
+  <div id="pbox">
+    <div class="bar"><span>Your projects (saved in this browser)</span>
+      <button id="pnew" class="primary">New project</button><button id="pclose">Close</button></div>
+    <div id="plist"></div>
   </div>
 </div>
 <div id="toast"></div>
@@ -627,13 +645,60 @@ function fail(msg) {
   d.textContent = msg;
   document.body.appendChild(d);
 }
-if (!window.isSecureContext || !navigator.mediaDevices) {
-  fail('The camera is blocked because this page was opened as a local file. Upload this file to an HTTPS website (e.g. GitHub Pages or Netlify) and open that link on your phone.');
-} else {
-  obj.setAttribute('gltf-model', blobUrl('${toBase64(glb)}', 'model/gltf-binary'));
-  sc.setAttribute('mindar-image', 'imageTargetSrc: ' + blobUrl('${mindB64}', 'application/octet-stream') + '; autoStart: true;');
-  sc.addEventListener('arError', () => fail('Could not start the camera. Allow camera access for this site and reload.'));
+const ua = navigator.userAgent;
+const inApp = /WhatsApp|FBAN|FBAV|Instagram|Line\\/|Snapchat|MicroMessenger|TikTok|Telegram|; wv\\)/i.test(ua);
+const isIOS = /iPhone|iPad|iPod/i.test(ua);
+
+function showStart(note) {
+  const old = document.getElementById('start');
+  if (old) old.remove();
+  const d = document.createElement('div');
+  d.id = 'start';
+  d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#151a27;color:#fff;font:16px/1.5 system-ui;padding:28px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:18px';
+  const p = document.createElement('div');
+  p.style.maxWidth = '420px';
+  p.textContent = note || 'Point your camera at the image to see the AR.';
+  const b = document.createElement('button');
+  b.textContent = note ? 'Try again' : 'Tap to start camera';
+  b.style.cssText = 'padding:14px 28px;border:0;border-radius:30px;background:#2f7df6;color:#fff;font:600 17px system-ui';
+  b.onclick = startAR;
+  d.appendChild(p);
+  d.appendChild(b);
+  document.body.appendChild(d);
 }
+
+function explain(err) {
+  const n = err && err.name;
+  if (n === 'NotAllowedError' || n === 'SecurityError' || n === 'PermissionDeniedError')
+    return isIOS
+      ? 'Camera access was denied. Open Settings > Safari > Camera, set it to Ask or Allow, then reload this page.'
+      : 'Camera access was denied. Tap the lock icon in the address bar, set Camera to Allow, then tap Try again. If you chose "Don\\'t allow" before, clear this site\\'s permission in Chrome > Settings > Site settings > Camera.';
+  if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'No camera was found on this device.';
+  if (n === 'NotReadableError' || n === 'AbortError') return 'The camera is being used by another app. Close it and tap Try again.';
+  return 'Could not start the camera' + (err && err.message ? ': ' + err.message : '.');
+}
+
+async function startAR() {
+  if (inApp) { showStart('This page is open inside another app, which blocks the camera. Open the link in Chrome (Android) or Safari (iPhone) instead.'); return; }
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showStart('The camera only works on secure (https://) pages. This page is at "' + location.protocol + '//". Upload it to an HTTPS host such as Netlify or GitHub Pages and open that link.');
+    return;
+  }
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+    s.getTracks().forEach(t => t.stop());
+  } catch (err) { showStart(explain(err)); return; }
+  try {
+    const go = () => sc.systems['mindar-image-system'].start();
+    if (sc.hasLoaded) go(); else sc.addEventListener('loaded', go, { once: true });
+    document.getElementById('start').remove();
+  } catch (err) { showStart('Could not start AR: ' + (err && err.message || err)); }
+}
+
+obj.setAttribute('gltf-model', blobUrl('${toBase64(glb)}', 'model/gltf-binary'));
+sc.setAttribute('mindar-image', 'imageTargetSrc: ' + blobUrl('${mindB64}', 'application/octet-stream') + '; autoStart: false;');
+sc.addEventListener('arError', () => showStart('Could not start the camera. Allow camera access for this site and tap Try again.'));
+showStart();
 <\/script>
 </body></html>`;
     deliver(html);
@@ -789,19 +854,139 @@ $('#btnLock').onclick = async () => {
 };
 
 function setSaveState(msg) { $('#saveState').textContent = msg; }
-let lastSaved = null, saving = false;
-setInterval(async () => {
-  if (autosavePaused || saving) return;
+
+// ---- multiple projects (IndexedDB) ----
+const dbp = new Promise((res, rej) => {
+  const r = indexedDB.open('arstudio', 1);
+  r.onupgradeneeded = () => r.result.createObjectStore('projects', { keyPath: 'id' });
+  r.onsuccess = () => res(r.result);
+  r.onerror = () => rej(r.error);
+});
+async function dbTx(mode, fn) {
+  const db = await dbp;
+  return new Promise((res, rej) => {
+    const t = db.transaction('projects', mode);
+    const q = fn(t.objectStore('projects'));
+    t.oncomplete = () => res(q && q.result);
+    t.onerror = t.onabort = () => rej(t.error);
+  });
+}
+const dbPut = rec => dbTx('readwrite', s => s.put(rec));
+const dbGet = id => dbTx('readonly', s => s.get(id));
+const dbAll = () => dbTx('readonly', s => s.getAll());
+const dbDel = id => dbTx('readwrite', s => s.delete(id));
+
+let currentId = null, currentName = '', lastSaved = null, saving = false;
+const CUR = 'arstudio-current';
+
+function showName() { $('#projName').textContent = currentName ? '• ' + currentName : ''; }
+
+async function saveNow() {
+  if (!currentId) return;
   const s = serialize();
-  if (s === lastSaved) return;
+  await dbPut({ id: currentId, name: currentName, updated: Date.now(), locked: !!password, text: await lockText(s) });
+  lastSaved = s;
+  setSaveState('Saved ' + new Date().toLocaleTimeString() + (password ? ' (locked)' : ''));
+}
+
+setInterval(async () => {
+  if (autosavePaused || saving || !currentId) return;
+  if (serialize() === lastSaved) return;
   saving = true;
-  try {
-    localStorage.setItem(KEY, await lockText(s));
-    lastSaved = s;
-    setSaveState('Autosaved ' + new Date().toLocaleTimeString() + (password ? ' (locked)' : ''));
-  } catch { setSaveState('Autosave failed (too large) - use Save'); }
+  try { await saveNow(); } catch { setSaveState('Could not save (storage full?) - use Save to download'); }
   saving = false;
 }, 2000);
+
+async function flush() {
+  if (!currentId || autosavePaused) return;
+  saving = true;
+  try { if (serialize() !== lastSaved) await saveNow(); } catch {}
+  saving = false;
+}
+
+async function createProject(name) {
+  await flush();
+  autosavePaused = true;
+  clearScene();
+  await setPassword(null);
+  currentId = crypto.randomUUID();
+  currentName = name;
+  localStorage.setItem(CUR, currentId);
+  showName();
+  lastSaved = null;
+  autosavePaused = false;
+  await saveNow();
+}
+
+async function openProject(id) {
+  await flush();
+  const rec = await dbGet(id);
+  if (!rec) return false;
+  let text = rec.text;
+  if (isLocked(text)) {
+    text = await askAndUnlock(text);
+    if (text === null) return false;
+  } else await setPassword(null);
+  autosavePaused = true;
+  try {
+    await loadProject(text);
+  } catch { toast('Could not open that project'); autosavePaused = false; return false; }
+  currentId = id;
+  currentName = rec.name;
+  localStorage.setItem(CUR, id);
+  showName();
+  lastSaved = null;
+  autosavePaused = false;
+  return true;
+}
+
+async function renderProjects() {
+  const list = $('#plist');
+  const all = (await dbAll()).sort((a, b) => b.updated - a.updated);
+  list.textContent = '';
+  all.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'prow' + (p.id === currentId ? ' cur' : '');
+    const info = document.createElement('div');
+    info.className = 'pinfo';
+    const nm = document.createElement('b');
+    nm.textContent = (p.locked ? '🔒 ' : '') + p.name;
+    const dt = document.createElement('small');
+    dt.textContent = new Date(p.updated).toLocaleString();
+    info.append(nm, dt);
+    const mk = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.onclick = fn; return b; };
+    row.append(info,
+      mk('Open', async () => { if (await openProject(p.id)) { $('#pmodal').classList.remove('show'); toast('Opened ' + p.name); } }),
+      mk('Rename', async () => {
+        const n = (prompt('Project name', p.name) || '').trim();
+        if (!n) return;
+        if (p.id === currentId) { currentName = n; showName(); await saveNow(); }
+        else { p.name = n; await dbPut(p); }
+        renderProjects();
+      }),
+      mk('Delete', async () => {
+        if (!confirm('Delete "' + p.name + '"? This cannot be undone.')) return;
+        await dbDel(p.id);
+        if (p.id === currentId) {
+          currentId = null;
+          const rest = await dbAll();
+          if (rest.length && await openProject(rest.sort((a, b) => b.updated - a.updated)[0].id)) {}
+          else { clearScene(); await createProject('Untitled'); }
+        }
+        renderProjects();
+      }));
+    list.appendChild(row);
+  });
+}
+$('#btnProjects').onclick = async () => { await flush(); await renderProjects(); $('#pmodal').classList.add('show'); };
+$('#pclose').onclick = () => $('#pmodal').classList.remove('show');
+$('#pnew').onclick = async () => {
+  const n = (prompt('Name for the new project', 'Project ' + ((await dbAll()).length + 1)) || '').trim();
+  if (!n) return;
+  await createProject(n);
+  $('#pmodal').classList.remove('show');
+  toast('Created ' + n);
+};
 
 $('#btnSave').onclick = async () => {
   const name = (prompt('Project name', 'my-ar-project') || '').trim();
@@ -819,32 +1004,47 @@ $('#openFile').onchange = async e => {
       text = await askAndUnlock(text);
       if (text === null) return;
     }
+    JSON.parse(text);
+    await flush();
+    const base = f.name.replace(/\.arstudio\.json$|\.json$/i, '') || 'Imported';
+    autosavePaused = true;
     await loadProject(text);
-    toast('Project opened');
-  } catch { toast('Not a valid project file'); }
-};
-$('#btnNew').onclick = () => {
-  if (items.length && !confirm('Clear the scene and start a new project?')) return;
-  clearScene();
-  localStorage.removeItem(KEY);
-  lastSaved = null;
-  setSaveState('');
+    currentId = crypto.randomUUID();
+    currentName = base;
+    localStorage.setItem(CUR, currentId);
+    showName();
+    lastSaved = null;
+    autosavePaused = false;
+    await saveNow();
+    toast('Project opened and added to your projects');
+  } catch { autosavePaused = false; toast('Not a valid project file'); }
 };
 
-const startFresh = () => addItem('Tree', LIBRARY.Tree(), false, { lib: 'Tree' });
 (async () => {
-  const saved = localStorage.getItem(KEY);
-  if (!saved) { startFresh(); return; }
   try {
-    let plain = saved;
-    if (isLocked(saved)) {
-      plain = await askAndUnlock(saved);
-      if (plain === null) { autosavePaused = true; setSaveState('Locked - autosave paused'); startFresh(); return; }
+    let all = await dbAll();
+    const legacy = localStorage.getItem(KEY);
+    if (legacy && !all.length) {
+      await dbPut({ id: crypto.randomUUID(), name: 'My first project', updated: Date.now(), locked: isLocked(legacy), text: legacy });
+      localStorage.removeItem(KEY);
+      all = await dbAll();
     }
-    await loadProject(plain);
-    lastSaved = plain;
-    setSaveState('Restored last session');
-  } catch { startFresh(); }
+    if (all.length) {
+      all.sort((a, b) => b.updated - a.updated);
+      const wanted = all.find(p => p.id === localStorage.getItem(CUR)) || all[0];
+      if (await openProject(wanted.id)) { setSaveState('Restored ' + wanted.name); return; }
+      autosavePaused = true;
+      setSaveState('Choose a project');
+      $('#pmodal').classList.add('show');
+      await renderProjects();
+      return;
+    }
+    await createProject('My first project');
+    addItem('Tree', LIBRARY.Tree(), false, { lib: 'Tree' });
+  } catch {
+    setSaveState('Browser storage unavailable - use Save to download');
+    addItem('Tree', LIBRARY.Tree(), false, { lib: 'Tree' });
+  }
 })();
 </script>
 </body>
