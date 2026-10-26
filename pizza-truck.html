@@ -314,7 +314,7 @@ counter(-2.7, -1.9, -3.2, 3.9, .9, 0x8a6a4a);
 counter(1.9, 2.7, -2.0, 3.9, .9, 0x8a6a4a);
 counter(-1.4, 1.4, 3.7, 4.4, 1.4, 0x444444);
 const island = counter(-.8, .8, -1.5, .1, .9, 0x8a6a4a);
-const SH_W = .9, SH_T = .6, SH_STEP = .35, SH_RISE = .4;
+const SH_W = .9, SH_T = .6, SH_STEP = .28, SH_RISE = .26;
 let shLv = 1;
 const shD = () => SH_T + SH_STEP * (shLv - 1);
 const SHELVES = [[2.15, -4.0], [1.2, -4.0], [.25, -4.0]].map(([cx, cz]) => {
@@ -444,6 +444,8 @@ BINS.forEach(([k, n], i) => { const m = ingMesh(k); m.scale.setScalar(1.35); add
 const ovenX = i => -.9 + .6 * i;
 [0, 1, 2, 3].forEach(i => addStation('oven', box(.5, .03, .5, 0x222222), ovenX(i), 1.415, 4.0, { label: 'Oven slot ' + (i + 1), slot: i }));
 const oven = [null, null, null, null];
+let ovenSlots = 4;                        // bought ovens take slots 4, 5, ...
+const ensureOven = n => { while (oven.length < n) oven.push(null); };
 function mkDrinks() {
   const g = new THREE.Group();
   const b = box(.5, .36, .4, 0x2a7fd4); b.position.y = 0; g.add(b);
@@ -502,6 +504,7 @@ const SHOP = [
   { key: 'drinks', name: 'Drink cooler', price: 50, max: 2 },
   { key: 'crate', name: 'Spring crate', price: 50, max: 4 },
   { key: 'trash', name: 'Trash can', price: 20, max: 2 },
+  { key: 'oven', name: 'Extra oven', price: 180, max: 2 },
   ...BINS.map(([k, n]) => ({ key: 'pantry:' + k, name: 'Extra ' + n.toLowerCase() + ' bin', price: 35, max: 1 })),
 ];
 const EXTRA_MK = {
@@ -518,6 +521,10 @@ for (const it of SHOP) {
     let mesh, dy, extra, type;
     if (it.key.startsWith('pantry:')) {
       const k = it.key.slice(7); type = 'pantry'; mesh = ingMesh(k); mesh.scale.setScalar(1.35); dy = 0; extra = { label: BINS.find(b => b[0] === k)[1] + ' ($3)', kind: k };
+    } else if (it.key === 'oven') {
+      type = 'oven'; mesh = box(.5, .03, .5, 0x222222); dy = .015;
+      extra = { label: 'Oven slot ' + (ovenSlots + 1), slot: ovenSlots };
+      ensureOven(ovenSlots + 1); ovenSlots++;
     } else { type = it.key; [mesh, dy, extra] = EXTRA_MK[it.key](); }
     const s = addStation(type, mesh, 0, .9 + dy, 0, { ...extra, extra: true, active: false, dy });
     mesh.visible = false;
@@ -536,10 +543,8 @@ function autoPlace(st) {
   return false;
 }
 function fixExtras() { for (const s of stations) if (s.extra && s.active) { const p = s.mesh.position; if (placeErr(s, p.x, p.z)) autoPlace(s); } }
-setShelfLevels(1 + U('shelfLv')); setShelves(1 + U('shelves'));
-const DEF_LAYOUT = getLayout();
-if (save.layout) applyLayout(save.layout);
-applyOwned(); fixExtras();
+
+
 function setupFail(m) { toast(m); return false; }
 function tryMoveIsland(cx, cz) {
   const hw = (island.s.x1 - island.s.x0) / 2, hd = (island.s.z1 - island.s.z0) / 2;
@@ -1046,7 +1051,7 @@ modes.setup = {
     roadMat.visible = false; dashes.forEach(d => d.visible = false); deco.position.z = 0;
     clearKitchen(); players.forEach(p => { p.carry = null; p.held = null; });
     spawnPlayers();
-    $('#driveHud').style.display = 'none'; $('#mirrorFrame').style.display = 'none'; $('#orders').innerHTML = '';
+    $('#driveHud').style.display = 'none'; $('#mirrorFrame').style.display = 'none'; $('#orders').style.display = 'none';
     $('#help').innerHTML = HELP.setup;
     $('#setupBtns').style.display = net.role === 'client' ? 'none' : 'flex';
     toast('Set up your truck');
@@ -1068,7 +1073,7 @@ modes.cook = {
     Object.assign(cook, { orders: [], timer: L.time, next: 4, served: 0, missed: 0 });
     if (G.stopIndex === 0) setupKitchen();
     spawnPlayers();
-    $('#driveHud').style.display = 'none'; $('#mirrorFrame').style.display = 'none';
+    $('#driveHud').style.display = 'none'; $('#mirrorFrame').style.display = 'none'; $('#orders').style.display = 'flex';
     $('#help').innerHTML = HELP.cook; cook.over = false;
     renderOrders(); toast('Stop: ' + L.name);
   },
@@ -1149,6 +1154,7 @@ modes.drive = {
     drive.total = items.length;
     $('#driveHud').style.display = 'block';
     $('#mirrorFrame').style.display = 'none';
+    $('#orders').style.display = 'none'; // Hide orders during drive
     $('#help').innerHTML = players.length > 1 ? HELP.driveMP : HELP.drive;
     toast('Drive to ' + dest.name);
   },
@@ -1366,6 +1372,7 @@ function clientEnter(mode) {
     const dr = mode === 'drive';
     roadMat.visible = dr; dashes.forEach(d => d.visible = dr);
     $('#driveHud').style.display = dr ? 'block' : 'none'; $('#mirrorFrame').style.display = 'none';
+    $('#orders').style.display = dr || mode === 'setup' ? 'none' : 'flex'; // Hide orders in drive/setup
     $('#help').innerHTML = dr ? HELP.driveMP : mode === 'setup' ? HELP.setup : HELP.cook;
     if (dr) clearObst();
   } else if (mode === 'menu') modes.menu.enter();
@@ -1393,6 +1400,7 @@ function applySnapshot(s) {
     if (!q) makeSplat(id, x, z, col, hp); else if (q.hp !== hp) { q.hp = hp; setSplatHp(q); }
   }
   for (const q of splats.slice()) if (!sid.has(q.id)) removeSplat(q);
+  ensureOven(s.ov.length);
   s.ov.forEach((id, i) => { oven[i] = byId.get(id) || null; });
   const list = [me];
   for (const q of s.pl) {
@@ -1498,6 +1506,428 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
   if (m && m.after) m.after();
 });
+
+// Boot sequence - moved up to prevent TDZ errors in the polish pack
+setShelfLevels(1 + U('shelfLv')); setShelves(1 + U('shelves'));
+const DEF_LAYOUT = getLayout();
+
+// ===== POLISH PACK: nicer visuals + synthesized sound (no audio files needed) =====
+(() => {
+  // ---------- UI styling ----------
+  const css = document.createElement('style');
+  css.textContent = `
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap');
+html,body,button,input{font-family:'Fredoka',system-ui,sans-serif}
+.screen{background:radial-gradient(ellipse at 50% 30%,rgba(110,45,60,.5),rgba(18,10,30,.78));backdrop-filter:blur(3px)}
+h1{font-size:clamp(40px,8vw,76px);color:#ffd24d;letter-spacing:1px;text-shadow:0 3px 0 #d4491f,0 6px 0 #8f2412,0 14px 26px #000a;animation:bob 2.6s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-7px) rotate(-1.2deg)}}
+h2{letter-spacing:.5px;text-shadow:0 2px 8px #0008}
+button{font-weight:600;background:linear-gradient(#ff6f4f,#e8452c);transition:transform .12s,filter .12s}
+button.alt{background:linear-gradient(#5a6db0,#3a4a7a)}
+button:hover:not(:disabled){filter:brightness(1.14);transform:translateY(-2px)}
+input{background:#2a2040;border-color:#5a6db0}
+.up{background:linear-gradient(#372c56,#2a2040);border:1px solid #ffffff1a;box-shadow:0 4px 14px #0006}
+#topbar{background:linear-gradient(#000d,#0000);font-size:16px;align-items:center;gap:10px}
+#orders .up{border-left:4px solid #ffcf4a}
+#orders .up.fresh{animation:pin .3s ease-out}
+@keyframes pin{from{transform:translateX(-24px);opacity:0}}
+#toast{animation:tin .2s ease-out;border:1px solid #fff3;backdrop-filter:blur(6px);font-weight:600}
+@keyframes tin{from{transform:translate(-50%,-12px);opacity:0}}
+#bigTimer,#driveHud,#heldTxt,#tip{border:1px solid #fff2;backdrop-filter:blur(4px)}
+#prompt{text-shadow:0 2px 6px #000,0 0 12px #000}
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;background:radial-gradient(ellipse at center,transparent 55%,rgba(12,5,22,.3))}
+#toast{top:108px}
+#bMute{padding:4px 12px;font-size:14px;box-shadow:none;margin:-4px 0}`;
+  document.head.appendChild(css);
+
+  const safe = (n, f) => { try { f(); } catch (e) { console.error('[polish] ' + n + ' failed:', e); } };
+  let sky = null, paintSky = () => {};
+  const canvasTex = (draw, rep) => {
+    const c = document.createElement('canvas'); c.width = c.height = 128; draw(c.getContext('2d'));
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...rep); t.anisotropy = 4; return t;
+  };
+  safe('render', () => {
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.2;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0004; sun.shadow.normalBias = .02;
+
+  });
+  safe('sky', () => {
+  const skyCv = document.createElement('canvas'); skyCv.width = 4; skyCv.height = 256;
+  const skyTex = new THREE.CanvasTexture(skyCv); skyTex.colorSpace = THREE.SRGBColorSpace;
+  sky = new THREE.Mesh(new THREE.SphereGeometry(300, 24, 12), new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, depthWrite: false, fog: false, toneMapped: false }));
+  sky.frustumCulled = false; sky.renderOrder = -1; scene.add(sky);
+  paintSky = c => {
+    const g = skyCv.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256), hex = '#' + c.sky.toString(16).padStart(6, '0');
+    gr.addColorStop(0, new THREE.Color(c.sky).offsetHSL(0, .15, -.17).getStyle()); gr.addColorStop(.5, hex); gr.addColorStop(1, hex);
+    g.fillStyle = gr; g.fillRect(0, 0, 4, 256); skyTex.needsUpdate = true;
+  };
+  });
+  safe('kitchen', () => {
+  // kitchen: checker floor, wood counters, warm walls, ceiling lamps, neon sign
+  const floor = envMeshes[0];
+  floor.material.map = canvasTex(g => { g.fillStyle = '#f2e8d5'; g.fillRect(0, 0, 128, 128); g.fillStyle = '#c0392b'; g.fillRect(0, 0, 64, 64); g.fillRect(64, 64, 64, 64); }, [8, 13]);
+  floor.material.color.set(0xffffff); floor.material.roughness = .55;
+  const wood = canvasTex(g => { g.fillStyle = '#9b7650'; g.fillRect(0, 0, 128, 128); for (let y = 0; y < 128; y += 16) { g.fillStyle = `rgba(60,35,15,${.08 + Math.random() * .15})`; g.fillRect(0, y, 128, 15); g.fillStyle = '#4a2f18'; g.fillRect(0, y, 128, 1.5); } }, [1, 3]);
+  for (const m of envMeshes) {
+    if (!m.material || !m.material.color) continue;
+    const hx = m.material.color.getHex();
+    if (hx === 0x8a6a4a) { m.material.map = wood; m.material.color.set(0xffffff); }
+    else if (hx === 0xe9e2cf) m.material.color.set(0xf4e4bf);
+  }
+  [-3, 0, 3].forEach(z => {
+    const l = new THREE.Mesh(new THREE.BoxGeometry(.6, .05, .3), new THREE.MeshStandardMaterial({ color: 0xfff6dc, emissive: 0xffeab0, emissiveIntensity: 1.4 }));
+    l.position.set(0, H - .03, z); truck.add(l);
+  });
+  { const c = document.createElement('canvas'); c.width = 512; c.height = 112; const g = c.getContext('2d');
+    g.font = '700 70px Fredoka,system-ui,sans-serif'; g.textAlign = 'center'; g.shadowColor = '#ff5a3c'; g.shadowBlur = 22; g.fillStyle = '#ffe48a'; g.fillText('SLICE & SLIDE', 256, 80);
+    const sg = new THREE.Mesh(new THREE.PlaneGeometry(1.7, .37), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, toneMapped: false }));
+    sg.material.map.colorSpace = THREE.SRGBColorSpace; sg.position.set(0, 1.95, 4.44); sg.rotation.y = Math.PI; truck.add(sg); }
+
+  });
+  safe('road', () => {
+  // road: curbs, sidewalks, edge lines (children of the road so they scroll with it)
+  [-1, 1].forEach(s => {
+    const side = box(3.2, .12, 900, 0x9c9a96); side.position.set(s * 9.6, .06, 0); roadMat.add(side);
+    const curb = box(.35, .16, 900, 0xc9c6c0); curb.position.set(s * 8.1, .08, 0); roadMat.add(curb);
+    const ln = box(.15, .03, 900, 0xffffff); ln.position.set(s * 7.4, .03, 0); roadMat.add(ln);
+  });
+
+  });
+  safe('scenery', () => {
+  // scenery: textured buildings / festival tents, trees, lamp posts (rebuilt per location)
+  const winTex = (base, w, h) => {
+    const t = canvasTex(g => { g.fillStyle = base; g.fillRect(0, 0, 128, 128); for (let y = 8; y < 120; y += 24) for (let x = 8; x < 120; x += 28) { g.fillStyle = Math.random() < .35 ? '#ffe39a' : '#3b4a63'; g.fillRect(x, y, 16, 16); } }, [Math.max(1, Math.round(w / 2)), Math.max(1, Math.round(h / 3))]);
+    return new THREE.MeshStandardMaterial({ map: t, roughness: .75 });
+  };
+  const PAL = [[0xf6d7b0, 0xf2a6a0, 0x9fd8e0, 0xf7eeb8], [0xff8fc7, 0x8f7bff, 0xffd24d, 0x5ee0c0], [0xb8b0a8, 0x8f9db8, 0xc4a484, 0x9bb59b]];
+  const hexCss = n => '#' + n.toString(16).padStart(6, '0');
+  function buildScenery(idx) {
+    while (deco.children.length) deco.remove(deco.children[0]);
+    const pal = PAL[idx] || PAL[0];
+    for (let i = 0; i < 42; i++) {
+      const side = i % 2 ? 1 : -1, g = new THREE.Group(), col = pal[i % 4], w = rand(3, 7), h = rand(3, 12), d = rand(3, 7);
+      g.userData.z0 = 30 - rand(0, 560); g.position.set(side * rand(13, 24), 0, g.userData.z0);
+      if (idx === 1) {
+        const th = h * .6 + 2, t = new THREE.Mesh(new THREE.ConeGeometry(w * .7, th, 8), mat(col)); t.position.y = th / 2; g.add(t);
+        const tip = new THREE.Mesh(new THREE.SphereGeometry(.2, 8, 6), mat(0xffffff)); tip.position.y = th + .1; g.add(tip);
+      } else {
+        const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), winTex(hexCss(col), w, h)); b.position.y = h / 2; g.add(b);
+        const r = new THREE.Mesh(new THREE.BoxGeometry(w + .3, .3, d + .3), mat(0x555a66)); r.position.y = h + .15; g.add(r);
+      }
+      deco.add(g);
+    }
+    const trunkM = mat(0x6b4a2b), leafM = mat(idx === 2 ? 0x4f8a4a : 0x3c9a4a);
+    for (let i = 0; i < 60; i++) {
+      const side = i % 2 ? 1 : -1, g = new THREE.Group(); g.userData.z0 = 30 - i * 9.3; g.position.set(side * rand(9.8, 11.5), 0, g.userData.z0);
+      const tr = new THREE.Mesh(new THREE.CylinderGeometry(.16, .24, 1.6, 6), trunkM); tr.position.y = .8; g.add(tr);
+      const cr = new THREE.Mesh(new THREE.IcosahedronGeometry(1.1, 1), leafM); cr.position.y = 2.4; cr.scale.y = 1.1; g.add(cr);
+      deco.add(g);
+      if (i % 3 === 0) {
+        const lg = new THREE.Group(); lg.userData.z0 = g.userData.z0 - 4.6; lg.position.set(side * 8.9, 0, lg.userData.z0);
+        const po = new THREE.Mesh(new THREE.CylinderGeometry(.05, .07, 3.2, 6), mat(0x333840)); po.position.y = 1.6; lg.add(po);
+        const bu = new THREE.Mesh(new THREE.SphereGeometry(.16, 8, 6), new THREE.MeshStandardMaterial({ color: 0xfff2c0, emissive: 0xffe49a, emissiveIntensity: 1.5 })); bu.position.y = 3.3; lg.add(bu);
+        deco.add(lg);
+      }
+    }
+  }
+  let sceneBuilt = -1;
+  const SUN = [0xfff0cf, 0xffc4ee, 0xe2eaff];
+  const _setScenery = setScenery;
+  setScenery = c => {
+    _setScenery(c);
+    const i = Math.max(0, LOCATIONS.indexOf(c));
+    paintSky(c);
+    sun.color.set(SUN[i]);
+    if (sceneBuilt !== i) { sceneBuilt = i; try { buildScenery(i); } catch (e) { console.error('[polish] scenery', e); } }
+  };
+  setScenery(LOCATIONS[0]);
+
+  });
+  safe('fov', () => {
+  // speed feel: FOV widens as you drive
+  const _render = renderer.render.bind(renderer);
+  renderer.render = (s, c) => {
+    if (c === camera) {
+      const tgt = 60 + (G.mode === 'drive' ? Math.min(drive.v, 40) * .45 : 0);
+      if (Math.abs(camera.fov - tgt) > .05) { camera.fov += (tgt - camera.fov) * .08; camera.updateProjectionMatrix(); }
+    }
+    _render(s, c);
+  };
+
+  });
+  safe('orders', () => {
+    // only genuinely new orders animate (the list is redrawn every 0.25s)
+    const seen = new Set(), _ro = renderOrders;
+    renderOrders = () => {
+      _ro();
+      document.querySelectorAll('#orders .up').forEach(el => {
+        const id = (el.querySelector('b') || {}).textContent;
+        if (!seen.has(id)) { seen.add(id); el.classList.add('fresh'); }
+      });
+    };
+  });
+  safe('stations', () => {
+    const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: o.r ?? .6, metalness: o.m ?? 0, emissive: o.e ?? 0, emissiveIntensity: o.ei ?? 1 });
+    const add = (p, w, h, d, x, y, z, c, o = {}) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), M(c, o)); m.position.set(x, y, z); m.castShadow = true; p.add(m); return m; };
+    const grain = canvasTex(g => { g.fillStyle = '#dcb883'; g.fillRect(0, 0, 128, 128); for (let i = 0; i < 14; i++) { g.fillStyle = `rgba(110,70,30,${.06 + Math.random() * .12})`; g.fillRect(0, Math.random() * 128, 128, 1 + Math.random() * 2); } }, [1, 1]);
+    const NAMES = { jar: 'SAUCE', cheese: 'CHEESE', pepperoni: 'PEPPERONI', mushroom: 'MUSHROOM', basil: 'BASIL', pepper: 'PEPPERS' };
+    const dress = {
+      board(st) {
+        const m = st.mesh; m.material.map = grain; m.material.color.set(0xffffff);
+        add(m, .14, .03, .1, 0, 0, .35, 0xd4ac70); add(m, .5, .012, .02, 0, .02, -.29, 0xb88a52); add(m, .5, .012, .02, 0, .02, .29, 0xb88a52);
+      },
+      doughbin(st) {
+        const m = st.mesh;
+        [[0, .2, .44, .025], [0, -.2, .44, .025]].forEach(([x, z, w, d]) => add(m, w, .03, d, x, .125, z, 0xf4efe2));
+        [[.2, 0], [-.2, 0]].forEach(([x, z]) => add(m, .025, .03, .4, x, .125, z, 0xf4efe2));
+        const dome = new THREE.Mesh(new THREE.SphereGeometry(.17, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), M(0xf3e3b8, { r: .9 }));
+        dome.scale.y = .55; dome.position.y = .115; m.add(dome); add(m, .28, .07, .006, 0, 0, .203, 0x3a6ea5);
+      },
+      crate(st) {
+        // open-topped crate: floor plate + walls, so stowed items sit INSIDE it
+        const m = st.mesh; m.geometry = new THREE.BoxGeometry(.4, .03, .5); m.geometry.translate(0, -.135, 0);
+        [-1, 1].forEach(sz => { add(m, .4, .27, .03, 0, .015, sz * .235, 0x4a5a8a); add(m, .43, .025, .05, 0, .155, sz * .235, 0x7f93d0); add(m, .3, .045, .006, 0, .04, sz * .253, 0xffcf4a); });
+        [-1, 1].forEach(sx => { add(m, .03, .27, .44, sx * .185, .015, 0, 0x4a5a8a); add(m, .05, .025, .5, sx * .185, .155, 0, 0x7f93d0); add(m, .006, .045, .36, sx * .203, .04, 0, 0xffcf4a); });
+        [[-.2, -.25], [.2, -.25], [-.2, .25], [.2, .25]].forEach(([x, z]) => add(m, .035, .31, .035, x, 0, z, 0x2b3350, { m: .4 }));
+      },
+      slicer(st) {
+        // plastic cutting board with a pizza wheel cutter lying next to it
+        const m = st.mesh; st.label = 'Cutting board + pizza cutter';
+        m.material.color.set(0xf0ece0); m.material.roughness = .5;
+        add(m, .4, .004, .4, 0, .027, 0, 0xe0dccd);
+        [-.17, .17].forEach(x => [-.17, .17].forEach(z => add(m, .03, .012, .03, x, -.03, z, 0x555a66)));
+        const hd = new THREE.Mesh(new THREE.CylinderGeometry(.015, .018, .17, 10), M(0xc0392b, { r: .5 })); hd.rotation.x = Math.PI / 2; hd.position.set(.31, -.012, .0); hd.castShadow = true; m.add(hd);
+        add(m, .014, .014, .04, .31, -.012, -.1, 0xbfc5cf, { m: .8, r: .3 });
+        [-.012, .012].forEach(dx => add(m, .004, .05, .014, .31 + dx, -.005, -.115, 0xbfc5cf, { m: .8, r: .3 }));
+        const wh = new THREE.Mesh(new THREE.CylinderGeometry(.04, .04, .004, 24), M(0xe8eef5, { m: .9, r: .2 })); wh.rotation.z = Math.PI / 2; wh.position.set(.31, .0, -.125); m.add(wh);
+      },
+      trash(st) {
+        const m = st.mesh;
+        add(m, .34, .04, .34, 0, .22, 0, 0x3a3d44, { m: .3 }); add(m, .12, .03, .03, 0, .255, 0, 0x888e99, { m: .8 });
+        [-.08, 0, .08].forEach(x => add(m, .02, .32, .005, x, -.02, .152, 0x474b55)); add(m, .3, .05, .005, 0, -.12, .152, 0x3c9a4a);
+      },
+      vent(st) {
+        const m = st.mesh; const b = new THREE.Mesh(new THREE.SphereGeometry(.055, 12, 8), M(0xffcf4a, { r: .3 })); b.position.y = .17; m.add(b);
+        add(m, .18, .36, .02, 0, 0, -.06, 0x2b2f3a, { m: .4 });
+      },
+      drinks(st) {
+        const m = st.mesh;
+        add(m, .02, .12, .02, .15, -.02, .222, 0xcfd6df, { m: .8 }); [-.14, -.16].forEach(y => add(m, .3, .008, .004, 0, y, .201, 0x1c4f8a));
+        const l = new THREE.Mesh(new THREE.SphereGeometry(.012, 8, 6), M(0x44ff77, { e: 0x22ff55, ei: 1.5 })); l.position.set(.18, .13, .21); m.add(l);
+      },
+      boxes(st) { const m = st.mesh; add(m, .42, .004, .05, 0, .082, .12, 0xc0392b); add(m, .42, .004, .05, 0, .082, -.12, 0xc0392b); },
+      seat(st) {
+        const m = st.mesh;
+        if (m.geometry && m.geometry.type === 'BoxGeometry') { add(m, .46, .06, .46, 0, .27, 0, 0x4a5f9a); add(m, .5, .55, .08, 0, .4, .25, 0x334477); add(m, .3, .15, .08, 0, .8, .25, 0x4a5f9a); }
+        else { add(m, .36, .02, .02, 0, 0, 0, 0x222222); add(m, .02, .36, .02, 0, 0, 0, 0x222222); const h = new THREE.Mesh(new THREE.SphereGeometry(.045, 10, 8), M(0xbfc5cf, { m: .8, r: .3 })); m.add(h); }
+      },
+      oven(st) {
+        // compact box oven: deck, steel walls + roof, glass door facing -Z, heating coils, status light
+        const m = st.mesh, steel = { m: .8, r: .35 }; m.material.color.set(0x2b2d33);
+        [-1, 1].forEach(sx => add(m, .03, .18, .5, sx * .235, .105, 0, 0x9aa1ad, steel)); add(m, .5, .18, .03, 0, .105, .235, 0x9aa1ad, steel);
+        add(m, .54, .03, .54, 0, .21, 0, 0xbfc5cf, steel);
+        const gl = add(m, .44, .15, .01, 0, .105, -.25, 0x9fc4e8, { r: .1 }); gl.material.transparent = true; gl.material.opacity = .28; gl.material.depthWrite = false; gl.castShadow = false;
+        add(m, .5, .025, .02, 0, .025, -.255, 0x4a4f5a); add(m, .5, .025, .02, 0, .19, -.255, 0x4a4f5a);
+        add(m, .3, .015, .015, 0, .175, -.285, 0xd7dbe2, steel); [-.14, .14].forEach(x => add(m, .015, .015, .03, x, .175, -.27, 0xd7dbe2, steel));
+        st._coils = [-.15, -.05, .05, .15].map(z => add(m, .4, .006, .015, 0, .02, z, 0xff6a2a, { e: 0xff4a10, ei: .25 }));
+        st._led = new THREE.Mesh(new THREE.SphereGeometry(.014, 8, 6), M(0x444444)); st._led.position.set(.2, .235, -.2); m.add(st._led);
+      },
+      window(st) {
+        const m = st.mesh;
+        add(m, .06, .06, 2.04, 0, .82, 0, 0xe8452c); [-1.0, 1.0].forEach(z => add(m, .06, .84, .05, 0, .4, z, 0xe8452c));
+        for (let i = 0; i < 6; i++) { const s = add(m, .5, .03, .3, .3, .95, -.75 + i * .3, i % 2 ? 0xf6efe0 : 0xe8452c); s.rotation.z = -.4; }
+      },
+      pantry(st) {
+        const m = st.mesh;
+        [[0, .1, .2, .012], [0, -.1, .2, .012]].forEach(([x, z, w, d]) => add(m, w, .03, d, x, .015, z, 0x6b4a2b)); [[.1, 0], [-.1, 0]].forEach(([x, z]) => add(m, .012, .03, .2, x, .015, z, 0x6b4a2b));
+        const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64; const g = cv.getContext('2d');
+        g.fillStyle = 'rgba(0,0,0,.65)'; g.fillRect(0, 0, 256, 64); g.fillStyle = '#ffe9a8'; g.font = '700 38px system-ui,sans-serif'; g.textAlign = 'center'; g.fillText(NAMES[st.kind] || '', 128, 46);
+        const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace;
+        const pl = new THREE.Mesh(new THREE.PlaneGeometry(.26, .065), new THREE.MeshBasicMaterial({ map: tx, transparent: true, toneMapped: false, side: THREE.DoubleSide }));
+        pl.position.set(0, .22, 0); pl.rotation.y = Math.PI / 2; m.add(pl); add(m, .01, .1, .01, 0, .15, 0, 0x6b4a2b);
+      },
+    };
+    for (const st of stations) { try { dress[st.type] && dress[st.type](st); } catch (e) { console.error('[polish] dress', st.type, e); } }
+  });
+  safe('toastpos', () => {
+    // keep toasts under the timer, and under the rear-view mirror while driving
+    setInterval(() => { const t = $('#toast'), mf = $('#mirrorFrame'); if (t) t.style.top = mf && mf.style.display === 'block' ? '194px' : '108px'; }, 150);
+  });
+  safe('ovens', () => {
+    const OH = .24, near = (o, x, z) => Math.abs(o.mesh.position.x - x) < .2 && Math.abs(o.mesh.position.z - z) < .2;
+    const ovens = () => stations.filter(s => s.type === 'oven');
+    // lower the back counter so the ovens sit at normal height
+    const bc = envMeshes.find(m => m.geometry && m.geometry.parameters && Math.abs(m.geometry.parameters.height - 1.4) < 1e-6 && m.position.z > 3.5);
+    if (bc) { bc.scale.y = .9 / 1.4; bc.position.y = .45; bc.material.color.set(0x5d636e); }
+    const sf = SURF.find(s => s.top === 1.4); if (sf) sf.top = .9;
+    // ovens become movable + stackable (layout also remembers each oven's height)
+    if (!MOVABLE.includes('oven')) MOVABLE.push('oven');
+    const _get = getLayout; getLayout = () => { const l = _get(); l.s.forEach((p, i) => { if (p && stations[i].type === 'oven') p.push(+stations[i].mesh.position.y.toFixed(3)); }); return l; };
+    const _apply = applyLayout; applyLayout = l => { _apply(l); if (l && Array.isArray(l.s)) l.s.forEach((p, i) => { const s = stations[i]; if (s && s.type === 'oven' && p && Number.isFinite(p[3])) s.mesh.position.y = p[3]; }); };
+    const _pe = placeErr;
+    placeErr = (st, x, z) => {
+      if (st.type !== 'oven') return _pe(st, x, z);
+      const g = surfaceAt(x, z); if (g <= 0) return 'Ovens need a table or counter';
+      const below = ovens().filter(o => o !== st && near(o, x, z)).length; if (below >= 3) return 'Ovens stack at most 3 high';
+      if (ovens().some(o => o !== st && !near(o, x, z) && Math.abs(o.mesh.position.x - x) < .52 && Math.abs(o.mesh.position.z - z) < .52)) return 'Too close to another oven';
+      if (stations.some(o => o.type !== 'oven' && o.active !== false && !['seat', 'vent', 'window'].includes(o.type) && Math.abs(o.mesh.position.x - x) < .4 && Math.abs(o.mesh.position.z - z) < .4 && Math.abs(o.mesh.position.y - (g + st.dy)) < .5)) return 'Too close to something else';
+      return null;
+    };
+    const _tp = tryPlaceStation;
+    tryPlaceStation = (st, x, z) => {
+      if (st.type !== 'oven') return _tp(st, x, z);
+      const e = placeErr(st, x, z); if (e) return setupFail(e);
+      st.mesh.position.set(x, surfaceAt(x, z) + st.dy + ovens().filter(o => o !== st && near(o, x, z)).length * OH, z); return true;
+    };
+    const settle = () => { // close gaps when an oven is moved out of the middle of a stack
+      const list = ovens(), done = new Set();
+      for (const a of list) {
+        if (done.has(a)) continue;
+        list.filter(b => near(b, a.mesh.position.x, a.mesh.position.z)).sort((p, q) => p.mesh.position.y - q.mesh.position.y)
+          .forEach((b, k) => { done.add(b); b.mesh.position.y = surfaceAt(b.mesh.position.x, b.mesh.position.z) + b.dy + k * OH; });
+      }
+    };
+    // default spots: a row on the (lowered) back counter; bought ovens are placed by the shop
+    ovens().forEach(s => { if (s.slot > 3) return; const x = ovenX(s.slot); s.mesh.position.set(x, surfaceAt(x, 4.0) + s.dy, 4.0); });
+    stations.forEach((s, i) => { if (s.type === 'oven' && s.slot < 4) DEF_LAYOUT.s[i] = [+ovenX(s.slot).toFixed(2), 4, 0]; });
+    if (save.layout) applyLayout(save.layout);
+    settle();
+    setInterval(() => {
+      if (net.role !== 'client') settle();
+      for (const st of ovens()) if (st._led) {
+        const o = oven[st.slot], q = o && o.d.q, col = !o ? 0x444444 : q === 'good' ? 0x44ff77 : q === 'burnt' ? 0xff3333 : 0xffaa33;
+        st._led.material.color.set(col); st._led.material.emissive.set(o ? col : 0); st._coils.forEach(c => { c.material.emissiveIntensity = o ? 1.6 : .25; });
+      }
+    }, 150);
+    // items sit inside crates (scaled down); pizzas on ovens/boards follow their station
+    syncItemMeshes = () => {
+      const inCrate = new Set();
+      for (const st of stations) if (st.type === 'crate') {
+        const th = st.mesh.rotation.y, c = Math.cos(th), s = Math.sin(th);
+        st.items.forEach((it, i) => {
+          inCrate.add(it);
+          const ox = ((i % 2) - .5) * .17, oz = (Math.floor(i / 2) % 2 - .5) * .22;
+          it.mesh.scale.setScalar(it.type === 'pizza' ? .42 : .6);
+          it.mesh.position.set(st.mesh.position.x + ox * c + oz * s, st.mesh.position.y - .1 + Math.floor(i / 4) * .07, st.mesh.position.z - ox * s + oz * c);
+          it.mesh.rotation.y = th;
+        });
+      }
+      for (const it of items) { if (!inCrate.has(it) && it.mesh.scale.x !== 1) it.mesh.scale.setScalar(1); if (!it.held && it.loc === 'free') it.mesh.position.copy(it.pos); }
+      for (const b of stations) if (b.type === 'board' && b.pizza) { b.pizza.mesh.position.set(b.mesh.position.x, b.mesh.position.y + .02, b.mesh.position.z); b.pizza.mesh.rotation.y = 0; }
+      oven.forEach((o, i) => {
+        if (!o) return; const s = stations.find(t => t.type === 'oven' && t.slot === i);
+        if (s) { o.mesh.position.set(s.mesh.position.x, s.mesh.position.y + .016, s.mesh.position.z); o.mesh.rotation.y = s.mesh.rotation.y; }
+      });
+    };
+  });
+  safe('sound', () => {
+  // ---------- Sound ----------
+  const AC = window.AudioContext || window.webkitAudioContext;
+  let ac = null, master, musicG, engOsc, engGain, muted = false, nb = null;
+  function initAudio() {
+    if (ac || !AC) return;
+    ac = new AC(); master = ac.createGain(); master.gain.value = .55; master.connect(ac.destination);
+    musicG = ac.createGain(); musicG.gain.value = .2; musicG.connect(master);
+    engOsc = ac.createOscillator(); engOsc.type = 'sawtooth'; engOsc.frequency.value = 50;
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 360;
+    engGain = ac.createGain(); engGain.gain.value = 0; engOsc.connect(lp); lp.connect(engGain); engGain.connect(master); engOsc.start();
+  }
+  ['pointerdown', 'keydown'].forEach(e => addEventListener(e, () => { initAudio(); if (ac && ac.state === 'suspended') ac.resume(); }, true));
+
+  function tone(f, d = .1, type = 'sine', v = .2, f2 = null, when = 0, dest = null) {
+    if (!ac || muted) return;
+    const t = ac.currentTime + when, o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d);
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(v, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+    o.connect(g); g.connect(dest || master); o.start(t); o.stop(t + d + .03);
+  }
+  function noise(d = .15, f = 1500, v = .2, type = 'bandpass', when = 0, dest = null) {
+    if (!ac || muted) return;
+    if (!nb) { nb = ac.createBuffer(1, ac.sampleRate, ac.sampleRate); const a = nb.getChannelData(0); for (let i = 0; i < a.length; i++) a[i] = Math.random() * 2 - 1; }
+    const t = ac.currentTime + when, s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = nb; s.loop = true; fl.type = type; fl.frequency.value = f;
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+    s.connect(fl); fl.connect(g); g.connect(dest || master); s.start(t); s.stop(t + d + .03);
+  }
+  const arp = (fs, d, type, v, gap) => fs.forEach((f, i) => tone(f, d, type, v, null, i * gap));
+  const SFX = {
+    click: () => tone(660, .06, 'triangle', .12, 900),
+    grab: () => tone(440, .07, 'triangle', .15, 700),
+    drop: () => { tone(220, .09, 'sine', .2, 140); noise(.05, 800, .08); },
+    throw: () => noise(.22, 1400, .16),
+    add: () => { tone(520, .06, 'square', .06, 800); noise(.06, 3000, .08, 'highpass'); },
+    roll: () => { noise(.09, 300, .22, 'lowpass'); tone(110, .09, 'sine', .22, 80); },
+    slice: () => { noise(.1, 5000, .16, 'highpass'); tone(900, .06, 'sawtooth', .05, 300); },
+    box: () => { noise(.12, 600, .16, 'lowpass'); tone(180, .1, 'triangle', .16); },
+    ding: () => arp([1047, 1568], .5, 'sine', .18, .09),
+    cash: () => { arp([784, 988, 1319, 1568], .18, 'square', .06, .07); tone(2093, .4, 'sine', .08, null, .3); },
+    bad: () => tone(200, .28, 'sawtooth', .12, 80),
+    splat: () => { noise(.25, 500, .3, 'lowpass'); tone(150, .2, 'sine', .25, 50); },
+    scrub: () => noise(.12, 2500, .16),
+    clean: () => arp([660, 880, 1175], .15, 'triangle', .12, .06),
+    bump: () => { tone(90, .2, 'sine', .5, 40); noise(.12, 200, .3, 'lowpass'); },
+    pot: () => { tone(70, .32, 'sine', .6, 30); noise(.22, 150, .35, 'lowpass'); },
+    hiss: () => noise(.6, 6000, .2, 'highpass'),
+    vent: () => noise(.45, 3000, .24, 'highpass'),
+    seat: () => tone(300, .09, 'triangle', .16, 200),
+    place: () => { tone(330, .06, 'square', .07, 440); tone(440, .08, 'square', .07, null, .06); },
+    start: () => arp([523, 659, 784, 1047], .2, 'triangle', .14, .09),
+    win: () => arp([523, 659, 784, 1047, 1319], .28, 'triangle', .16, .11),
+    lose: () => arp([440, 392, 349, 262], .35, 'sawtooth', .09, .17),
+  };
+  const sfx = n => { try { SFX[n] && SFX[n](); } catch {} };
+  const RULES = [
+    [/^Served|^Drink served|^Pizza for/, 'cash'], [/splattered/, 'splat'], [/^Cleaned/, 'clean'], [/^Scrubbing/, 'scrub'],
+    [/^Sliced/, 'slice'], [/^Boxed/, 'box'], [/^Rolling/, 'roll'], [/is ready/, 'ding'],
+    [/customer left|refuses|^Nobody|Burnt|Steam ruined/, 'bad'], [/^Pothole/, 'pot'], [/^Speed bump/, 'bump'],
+    [/Engine steam/, 'hiss'], [/^Steam vented/, 'vent'], [/^Placed|^Layout reset/, 'place'], [/^Picked up/, 'grab'],
+    [/^Driving:/, 'seat'], [/^Thrown away/, 'drop'], [/^Stop:|^Drive to|^Set up/, 'start'],
+  ];
+  const _showToast = showToast;
+  showToast = t => { _showToast(t); const r = RULES.find(r => r[0].test(t)); if (r) sfx(r[1]); };
+  const _showResult = showResult;
+  showResult = (t, ...a) => { sfx(t === 'Run over' ? 'lose' : 'win'); return _showResult(t, ...a); };
+  addEventListener('click', e => { if (e.target.closest && e.target.closest('button')) sfx('click'); }, true);
+  addEventListener('mousedown', e => { if (e.button === 2 && document.pointerLockElement === $('#gl')) sfx('throw'); });
+
+  // mute: M key or the speaker button
+  const mb = document.createElement('button'); mb.id = 'bMute'; mb.className = 'alt'; mb.textContent = '\u{1F50A}';
+  $('#topbar').insertBefore(mb, $('#bQuit'));
+  const toggleMute = () => { muted = !muted; mb.textContent = muted ? '\u{1F507}' : '\u{1F50A}'; if (master) master.gain.value = muted ? 0 : .55; showToast(muted ? 'Sound off (M)' : 'Sound on (M)'); };
+  mb.onclick = toggleMute;
+  addEventListener('keydown', e => { if (e.code === 'KeyM' && !e.repeat && e.target.tagName !== 'INPUT') toggleMute(); });
+
+  // background music: little bass + arpeggio loop, tempo follows the mode
+  const mf = m => 440 * 2 ** ((m - 69) / 12), ROOTS = [48, 45, 41, 43], LEAD = [0, 4, 7, 12, 7, 4, 12, 7];
+  let step = 0, nextT = 0;
+  function music(mode) {
+    const t0 = ac.currentTime; if (nextT < t0 - .5) nextT = t0 + .05;
+    const calm = mode === 'menu' || mode === 'setup', dur = 60 / ({ menu: 96, setup: 96, cook: 124, drive: 138 }[mode] || 100) / 2;
+    while (nextT < t0 + .25) {
+      const w = nextT - t0, k = step % 8, r = ROOTS[Math.floor(step / 8) % 4];
+      tone(mf(r - 12 + (k % 2 ? 7 : 0)), dur * .9, 'triangle', .55, null, w, musicG);
+      if (!calm || k % 2 === 0) tone(mf(r + 12 + LEAD[k]), dur * .8, calm ? 'sine' : 'square', calm ? .22 : .13, null, w, musicG);
+      if (!calm && k % 2) noise(.04, 8000, .1, 'highpass', w, musicG);
+      nextT += dur; step++;
+    }
+  }
+  let lastHeld = null;
+  setInterval(() => {
+    if (!ac) return;
+    const h = me.held;
+    if (h !== lastHeld) { if (isRun()) { if (h) sfx('grab'); else if (lastHeld) sfx(items.includes(lastHeld) ? 'drop' : 'add'); } lastHeld = h; }
+    const v = drive.v || 0, on = G.mode === 'drive' && !drive.done;
+    engGain.gain.setTargetAtTime(on ? .04 + .05 * Math.min(1, v / 30) : 0, ac.currentTime, .08);
+    engOsc.frequency.setTargetAtTime(48 + v * 3.2, ac.currentTime, .1);
+    if (!muted) music(G.mode);
+  }, 50);
+  });
+})();
+
+// ---- boot: apply saved layout and start ----
+if (save.layout) applyLayout(save.layout);
+applyOwned(); fixExtras();
 setMode('menu');
 </script>
 </body></html>
