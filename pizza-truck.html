@@ -16,7 +16,7 @@ button:disabled{opacity:.45;cursor:default}
 input{font:700 18px system-ui;padding:10px 12px;width:110px;text-align:center;text-transform:uppercase;border-radius:10px;border:2px solid #3a4a7a;background:#2a2040;color:#fff}
 .hud{position:fixed;z-index:4;pointer-events:none;display:none}
 .hud.on{display:block}
-#topbar{top:0;left:0;right:0;padding:10px 16px;display:none;justify-content:space-between;font-weight:700;z-index:6;background:linear-gradient(#0008,#0000)}
+#topbar{position:fixed;top:0;left:0;right:0;padding:10px 16px;display:none;justify-content:space-between;font-weight:700;z-index:6;background:linear-gradient(#0008,#0000)}
 #topbar.on{display:flex}
 #garageList{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;width:min(900px,100%);max-height:55vh;overflow:auto}
 .up{background:#2a2040;border-radius:10px;padding:10px;text-align:left}
@@ -25,7 +25,7 @@ input{font:700 18px system-ui;padding:10px 12px;width:110px;text-align:center;te
 #toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#000b;padding:8px 16px;border-radius:20px;z-index:20;display:none}
 </style></head><body>
 <canvas id="gl"></canvas>
-<div id="topbar"><span id="tbMode"></span><span id="tbInfo"></span><span id="tbMoney"></span></div>
+<div id="topbar"><span id="tbMode"></span><span id="tbInfo"></span><span id="tbMoney"></span><button id="bQuit" style="padding:4px 14px;font-size:14px;box-shadow:none;margin:-4px 0">Quit</button></div>
 <div id="toast"></div>
 
 <div class="screen on" id="menu">
@@ -62,12 +62,14 @@ input{font:700 18px system-ui;padding:10px 12px;width:110px;text-align:center;te
   <h2 id="rTitle"></h2>
   <div id="rBody" style="font-size:18px;line-height:1.7"></div>
   <button id="bNext">Continue</button>
+  <button class="alt" id="bUpg" style="display:none">Upgrade the truck</button>
   <button class="alt" id="bBank" style="display:none">Cash out and end run</button>
 </div>
 
 <div class="hud" id="game" style="inset:46px 0 0 0">
   <div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px;border:2px solid #fff;border-radius:50%;opacity:.85"></div>
   <div id="prompt" style="position:absolute;left:50%;top:56%;transform:translateX(-50%);text-shadow:0 1px 4px #000;font-weight:700;font-size:17px"></div>
+  <div id="bigTimer" style="position:absolute;left:50%;top:4px;transform:translateX(-50%);font:800 34px system-ui;text-shadow:0 2px 6px #000;display:none;background:#0008;padding:2px 18px;border-radius:14px"></div>
   <div id="tip" style="position:absolute;left:50%;top:62%;transform:translateX(-50%);max-width:min(520px,90vw);text-align:center;background:#000b;color:#ffe9a8;padding:6px 14px;border-radius:12px;font-size:14px;empty-cells:hide"></div>
   <div id="heldTxt"style="position:absolute;left:50%;bottom:14px;transform:translateX(-50%);background:#000a;padding:6px 14px;border-radius:20px"></div>
   <div id="orders" style="position:absolute;left:10px;top:6px;display:flex;flex-direction:column;gap:6px;max-width:250px"></div>
@@ -91,10 +93,10 @@ const net = { role: 'solo', peers: [], inLobby: false, lastTop: null };
 net.sendTo = (p, m) => { const e = net.peers.find(e => e.player === p); if (e && e.conn.open) e.conn.send(m); };
 net.broadcast = m => { for (const e of net.peers) if (e.conn.open) e.conn.send(m); };
 const HELP = {
-  setup: 'SET UP THE TRUCK: click a station or the middle table to pick it up, click a spot to put it down (right-click cancels)<br>WASD walk | Enter = start the day (host) | Layout is saved for next time',
-  cook: 'Click the screen to look around. WASD walk | Click / E use or grab | Right-click throw<br>Roll dough on the board, add sauce + cheese + toppings, bake, slice, serve at the window. Scrub splatters on the floor',
-  drive: 'ARROWS = pedals + steering (works while you walk) | WASD walk, or sit in the driver seat (click it) and drive with WASD, Q stands up<br>HOLD SPACE = hydraulic clamp on counters (top speed 70%) | Click the red lever to vent steam | Items left on the floor splatter: scrub them with empty hands',
-  driveMP: 'ONE player sits in the driver seat (click it) and drives with WASD or arrows, Q stands up<br>Crew: catch items and stow them in crates | HOLD SPACE = hydraulic clamp (top speed 70%) | Click the red lever to vent steam | Items left on the floor splatter: scrub them with empty hands',
+  setup: 'SET UP THE TRUCK: click a station or the middle table to pick it up (spring crates can go on the floor), click a spot to put it down (right-click cancels) | E / Q = turn what you hold 90 degrees | shelves can be moved too<br>WASD walk | Enter = start the day (host) | Layout is saved for next time',
+  cook: 'Click the screen to look around. WASD walk | Click / E use or grab | Right-click throw<br>Roll dough on the board, add sauce + cheese + toppings, bake, slice, box it, serve at the window. Scrub splatters on the floor',
+  drive: 'T = rearrange mode (click a station to pick it up, click a spot to place it) | ARROWS = pedals + steering (works while you walk) | WASD walk, or sit in the driver seat (click it) and drive with WASD, Q stands up<br>HOLD SPACE = hydraulic clamp on counters (top speed 70%) | Click the red lever to vent steam | Items left on the floor splatter: scrub them with empty hands',
+  driveMP: 'T = rearrange mode (move stations) | ONE player sits in the driver seat (click it) and drives with WASD or arrows, Q stands up<br>Crew: catch items and stow them in crates | HOLD SPACE = hydraulic clamp (top speed 70%) | Click the red lever to vent steam | Items left on the floor splatter: scrub them with empty hands',
 };
 function showToast(t) { const e = $('#toast'); e.textContent = t; e.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => e.style.display = 'none', 1800); }
 function toast(t) {
@@ -112,15 +114,23 @@ const UPG = {
   counter: { name: 'Magnetic counters',desc: 'More friction, items slide less',   max: 3, cost: l => 130 + l * 120 },
   slicer:  { name: 'Auto slicer',      desc: 'Baked pizzas are sliced for free',  max: 1, cost: l => 250 },
   latch:   { name: 'Reinforced latches',desc: 'Items resist falling off counters',max: 3, cost: l => 110 + l * 110 },
+  patience:{ name: 'Friendly customers', desc: 'Customers wait 15% longer per level', max: 4, cost: l => 90 + l * 90 },
+  burn:    { name: 'Slow-burn oven', desc: 'Pizzas stay golden longer before burning', max: 4, cost: l => 100 + l * 100 },
+  crate:   { name: 'Bigger spring crates', desc: 'Each crate holds 2 more items (base 8)', max: 4, cost: l => 90 + l * 90 },
+  shelves: { name: 'Shelves', desc: 'Adds a shelf by the steam vent (holds items and spring crates)', max: 2, cost: l => 120 + l * 120 },
+  shelfLv: { name: 'Taller shelves', desc: 'Every shelf gets another step (more room to store things)', max: 3, cost: l => 100 + l * 100 },
+  uses:    { name: 'Bulk ingredients', desc: 'Jars and boxes last 1 more use (base 5)', max: 5, cost: l => 80 + l * 80 },
 };
-const defSave = () => ({ money: 0, day: 1, best: 0, up: Object.fromEntries(Object.keys(UPG).map(k => [k, 0])) });
+const defSave = () => ({ money: 0, day: 1, best: 0, own: {}, up: Object.fromEntries(Object.keys(UPG).map(k => [k, 0])) });
 let save = defSave();
 try { const s = JSON.parse(localStorage.getItem('pizzatruck') || 'null'); if (s) save = { ...defSave(), ...s, up: { ...defSave().up, ...s.up } }; } catch {}
 const persist = () => { try { localStorage.setItem('pizzatruck', JSON.stringify(save)); } catch {} };
 const U = k => save.up[k];
 
+const inRun = () => G.mode === 'cook' || G.mode === 'drive';
+const cash = () => save.money + (inRun() ? G.runMoney : 0);
 function renderGarage() {
-  $('#gMoney').textContent = 'Cash: $' + save.money;
+  $('#gMoney').textContent = 'Cash: $' + cash() + (inRun() ? ' (includes this run)' : '');
   const box = $('#garageList');
   box.innerHTML = '';
   for (const k in UPG) {
@@ -130,9 +140,28 @@ function renderGarage() {
     d.innerHTML = `<b>${u.name}</b> (${l}/${u.max})<br><span style="color:#cdbfe6">${u.desc}</span><br>`;
     const b = document.createElement('button');
     b.textContent = maxed ? 'Maxed' : 'Buy $' + cost;
-    b.disabled = maxed || save.money < cost;
+    b.disabled = maxed || cash() < cost;
     b.style.marginTop = '6px';
-    b.onclick = () => { save.money -= cost; save.up[k]++; persist(); renderGarage(); };
+    b.onclick = () => { if (inRun()) G.runMoney -= cost; else save.money -= cost; save.up[k]++; persist(); if (k === 'shelves') setShelves(1 + U('shelves')); if (k === 'shelfLv') setShelfLevels(1 + U('shelfLv')); renderGarage(); };
+    d.appendChild(b);
+    box.appendChild(d);
+  }
+  const h = document.createElement('h3'); h.textContent = 'Truck shop (extra stations, place them in set-up)'; box.appendChild(h);
+  for (const it of SHOP) {
+    const n = ownedOf(it.key), maxed = n >= it.max, cost = it.price + n * 15;
+    const d = document.createElement('div');
+    d.className = 'up';
+    d.innerHTML = `<b>${it.name}</b> (${n}/${it.max})<br>`;
+    const b = document.createElement('button');
+    b.textContent = maxed ? 'Maxed' : 'Buy $' + cost;
+    b.disabled = maxed || cash() < cost;
+    b.style.marginTop = '6px';
+    b.onclick = () => {
+      if (inRun()) G.runMoney -= cost; else save.money -= cost;
+      save.own = save.own || {}; save.own[it.key] = n + 1; persist();
+      applyOwned(); const s = stations.filter(x => x.extra && sKey(x) === it.key && x.active).pop(); if (s) autoPlace(s);
+      renderGarage();
+    };
     d.appendChild(b);
     box.appendChild(d);
   }
@@ -185,6 +214,7 @@ const loc = () => LOCATIONS[(save.day - 1 + G.stopIndex) % LOCATIONS.length];
 function showResult(title, html, btnText, cb, bank) {
   if (net.role === 'host') net.broadcast({ t: 'result', title, html });
   $('#bBank').style.display = bank ? '' : 'none'; $('#bBank').onclick = () => endRun(false);
+  $('#bUpg').style.display = bank && net.role !== 'client' ? '' : 'none';
   $('#bNext').disabled = false;
   $('#rTitle').textContent = title;
   $('#rBody').innerHTML = html;
@@ -196,7 +226,7 @@ function showResult(title, html, btnText, cb, bank) {
 }
 function updateTop(mode, info) {
   net.lastTop = [mode, info || ''];
-  $('#tbMode').textContent = mode;
+  $('#tbMode').textContent = mode + ($('#tbMode').dataset.ts || '');
   $('#tbInfo').textContent = info || '';
   $('#tbMoney').textContent = '$' + save.money + ' (+$' + G.runMoney + ')';
 }
@@ -218,12 +248,27 @@ function endRun(failed, why = '') {
 }
 function nextStop() {
   G.stopIndex++;
+  hideAll(); topbar(true);
   setMode('cook');
 }
 
+$('#bQuit').onclick = () => {
+  if (document.exitPointerLock) document.exitPointerLock();
+  if (!confirm(net.role === 'client' ? 'Leave the game?' : 'Quit to the menu? Money earned this run is kept.')) return;
+  $('#game').classList.remove('on'); topbar(false); showTimer(null);
+  if (net.role === 'client') { leaveOnline(); return; }
+  players.forEach(p => { p.carry && glow(p.carry, 0); p.carry = null; p.held = null; p.seated = false; });
+  if (inRun()) {
+    if (net.role === 'host') net.broadcast({ t: 'pay', amt: G.runMoney });
+    save.money += G.runMoney; save.best = Math.max(save.best, G.runMoney); save.day++; persist();
+  }
+  G.runMoney = 0;
+  if (net.role === 'host') backToLobby(); else { setMode('menu'); show('menu'); }
+};
 $('#bPlay').onclick = startRun;
 $('#bGarage').onclick = () => { renderGarage(); show('garage'); };
-$('#bGarageBack').onclick = () => show('menu');
+$('#bGarageBack').onclick = () => show(inRun() ? 'result' : 'menu');
+$('#bUpg').onclick = () => { renderGarage(); show('garage'); };
 $('#bReset').onclick = () => { if (confirm('Erase all progress?')) { save = defSave(); persist(); toast('Progress reset'); } };
 
 // keyboard
@@ -269,6 +314,85 @@ counter(-2.7, -1.9, -3.2, 3.9, .9, 0x8a6a4a);
 counter(1.9, 2.7, -2.0, 3.9, .9, 0x8a6a4a);
 counter(-1.4, 1.4, 3.7, 4.4, 1.4, 0x444444);
 const island = counter(-.8, .8, -1.5, .1, .9, 0x8a6a4a);
+const SH_W = .9, SH_T = .6, SH_STEP = .35, SH_RISE = .4;
+let shLv = 1;
+const shD = () => SH_T + SH_STEP * (shLv - 1);
+const SHELVES = [[2.15, -4.0], [1.2, -4.0], [.25, -4.0]].map(([cx, cz]) => {
+  const g = new THREE.Group();
+  g.position.set(cx, 0, cz); g.visible = false; truck.add(g);
+  return { g, mesh: g, s: { top: 1.1 }, b: { x0: 0, x1: 0, z0: 0, z1: 0 }, tiers: [], cx, cz, rot: 0, shelf: true };
+});
+const mod4 = n => ((n % 4) + 4) % 4;
+function shelfRect(x, z, rot) { const w = rot & 1 ? shD() : SH_W, d = rot & 1 ? SH_W : shD(); return { x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 }; }
+function tierSpan(i) { const D = shD(), f = D / 2; return i === 0 ? [f - SH_T, f] : [f - SH_T - SH_STEP * i, f - SH_T - SH_STEP * (i - 1)]; }
+function buildShelfMesh(sh) {
+  while (sh.g.children.length) sh.g.remove(sh.g.children[0]);
+  for (let i = 0; i < shLv; i++) {
+    const [a, b] = tierSpan(i), top = 1.1 + SH_RISE * i;
+    const m = box(SH_W, top, b - a, i % 2 ? 0x8a6a46 : 0x7a5a3a); m.position.set(0, top / 2, (a + b) / 2); sh.g.add(m);
+  }
+  const top = 1.1 + SH_RISE * (shLv - 1), back = box(SH_W, .45, .06, 0xb08a5a); back.position.set(0, top + .225, -shD() / 2 + .03); sh.g.add(back);
+}
+function updateShelfSurf(sh) {
+  for (const t of sh.tiers) { const i = SURF.indexOf(t); if (i >= 0) SURF.splice(i, 1); }
+  sh.tiers = [];
+  const bi = BLOCK.indexOf(sh.b); if (bi >= 0) BLOCK.splice(bi, 1);
+  const r = shelfRect(sh.cx, sh.cz, sh.rot); Object.assign(sh.b, r);
+  if (!sh.g.visible) return;
+  BLOCK.push(sh.b);
+  const th = sh.rot * Math.PI / 2, c = Math.cos(th), sn = Math.sin(th);
+  const w = (lx, lz) => [sh.cx + lx * c + lz * sn, sh.cz - lx * sn + lz * c];
+  for (let i = 0; i < shLv; i++) {
+    const [a, b] = tierSpan(i), p = w(-SH_W / 2, a), q = w(SH_W / 2, b);
+    const t = { x0: Math.min(p[0], q[0]), x1: Math.max(p[0], q[0]), z0: Math.min(p[1], q[1]), z1: Math.max(p[1], q[1]), top: 1.1 + SH_RISE * i };
+    sh.tiers.push(t); SURF.push(t);
+  }
+}
+function setShelfLevels(n) {
+  shLv = n; G.shLv = n;
+  SHELVES.forEach(sh => { buildShelfMesh(sh); if (sh.g.visible && net.role !== 'client' && shelfErr(sh, sh.cx, sh.cz, sh.rot)) autoPlaceShelf(sh); updateShelfSurf(sh); });
+}
+function shelfErr(sh, x, z, rot) {
+  const r = shelfRect(x, z, rot);
+  if (r.x0 < -2.7 || r.x1 > 2.7 || r.z0 < -4.75 || r.z1 > 4.3) return 'The shelf must stay inside the truck';
+  if (BLOCK.some(b => b !== sh.b && r.x0 < b.x1 && r.x1 > b.x0 && r.z0 < b.z1 && r.z1 > b.z0)) return 'Something is in the way';
+  if (inRect(r, STAND.x, STAND.z, .5) || inRect(r, SEAT.x, SEAT.z, .35)) return 'Keep the driver seat reachable';
+  if (stations.some(s => s.type === 'vent' && inRect(r, s.mesh.position.x, s.mesh.position.z, .25))) return 'Keep the steam vent lever clear';
+  if (stations.some(s => s.active !== false && (s.type === 'trash' || s.type === 'crate') && s.mesh.position.y < .6 && inRect(r, s.mesh.position.x, s.mesh.position.z, .1))) return 'Move the floor item first';
+  return null;
+}
+function setStationRot(s, rot) { const d = mod4(rot - (s.rotA || 0)); if (d) s.mesh.rotation.y += d * Math.PI / 2; s.rotA = mod4(rot); }
+function moveShelf(sh, cx, cz, rot) {
+  rot = mod4(rot);
+  if (Math.abs(cx - sh.cx) < 1e-3 && Math.abs(cz - sh.cz) < 1e-3 && rot === sh.rot) return;
+  const old = { ...sh.b }, ox = sh.cx, oz = sh.cz, dr = mod4(rot - sh.rot), ph = dr * Math.PI / 2, c = Math.cos(ph), sn = Math.sin(ph);
+  const rel = (x, z) => { const dx = x - ox, dz = z - oz; return [cx + dx * c + dz * sn, cz - dx * sn + dz * c]; };
+  if (sh.g.visible) {
+    for (const s of stations) if (MOVABLE.includes(s.type) && s.active !== false && s.mesh.position.y > 1.0 && inRect(old, s.mesh.position.x, s.mesh.position.z)) {
+      const [x, z] = rel(s.mesh.position.x, s.mesh.position.z); s.mesh.position.x = x; s.mesh.position.z = z; setStationRot(s, (s.rotA || 0) + dr);
+    }
+    for (const it of items) if (!it.held && it.loc === 'free' && it.pos.y > .5 && inRect(old, it.pos.x, it.pos.z)) {
+      const [x, z] = rel(it.pos.x, it.pos.z); it.pos.x = x; it.pos.z = z; if (it.tgt) { const [tx, tz] = rel(it.tgt.x, it.tgt.z); it.tgt.x = tx; it.tgt.z = tz; }
+    }
+  }
+  sh.cx = cx; sh.cz = cz; sh.rot = rot; sh.g.position.set(cx, 0, cz); sh.g.rotation.y = rot * Math.PI / 2;
+  updateShelfSurf(sh);
+  if (typeof players !== 'undefined') players.forEach(p => freeSpot(p));
+}
+function autoPlaceShelf(sh) {
+  for (let z = -4.45; z <= 4; z += .15) for (let x = -2.4; x <= 2.4; x += .15) if (!shelfErr(sh, x, z, 0)) { moveShelf(sh, +x.toFixed(2), +z.toFixed(2), 0); return; }
+}
+function setShelves(n) {
+  SHELVES.forEach((sh, i) => {
+    const on = i < n, was = sh.g.visible;
+    sh.g.visible = on;
+    const ei = envMeshes.indexOf(sh.g);
+    if (on && ei < 0) envMeshes.push(sh.g); else if (!on && ei >= 0) envMeshes.splice(ei, 1);
+    if (on && !was && net.role !== 'client' && shelfErr(sh, sh.cx, sh.cz, sh.rot)) autoPlaceShelf(sh);
+    updateShelfSurf(sh);
+  });
+  G.shelfN = n;
+}
 [-3, 0, 3].forEach(z => { const l = new THREE.PointLight(0xfff1d0, 1.0, 9); l.position.set(0, 2.2, z); truck.add(l); });
 
 // stations
@@ -285,23 +409,70 @@ addStation('seat', box(.5, .5, .5, 0x334477), SEAT.x, .25, SEAT.z, { label: 'Dri
 const BINS = [['jar', 'Sauce jars'], ['cheese', 'Cheese blocks'], ['pepperoni', 'Pepperoni'], ['mushroom', 'Mushrooms'], ['basil', 'Basil'], ['pepper', 'Peppers']];
 const TOPCOL = { pepperoni: 0xc0392b, mushroom: 0xbfa98a, basil: 0x3c9a4a, pepper: 0xe6a817 };
 const BINCOL = { jar: 0xb02a1d, cheese: 0xf1c40f, ...TOPCOL };
-BINS.forEach(([k, n], i) => addStation('pantry', box(.16, .16, .16, BINCOL[k]), -2.55, 1.0, 1.0 + i * .45, { label: n + ' ($3)', kind: k }));
+function ingMesh(kind) {
+  const g = new THREE.Group();
+  const add = (geo, col, x = 0, y = 0, z = 0, o = {}) => {
+    const m = new THREE.Mesh(geo, o.glass ? new THREE.MeshStandardMaterial({ color: col, roughness: .1, transparent: true, opacity: .35 }) : mat(col));
+    m.position.set(x, y, z); if (o.s) m.scale.set(...o.s); if (o.rx) m.rotation.x = o.rx; if (o.ry) m.rotation.y = o.ry; m.castShadow = true; g.add(m); return m;
+  };
+  if (kind === 'jar') {
+    add(new THREE.CylinderGeometry(.055, .055, .12, 14), 0xc0301f, 0, .07, 0);
+    add(new THREE.CylinderGeometry(.062, .062, .14, 14), 0xdfeeee, 0, .075, 0, { glass: true });
+    add(new THREE.CylinderGeometry(.064, .064, .03, 14), 0xd4a017, 0, .16, 0);
+    add(new THREE.CylinderGeometry(.0635, .0635, .05, 14, 1, true), 0xfff4e0, 0, .075, 0);
+    add(new THREE.SphereGeometry(.018, 8, 6), 0xd32f1f, 0, .09, .064);
+  } else if (kind === 'cheese') {
+    add(new THREE.BoxGeometry(.15, .1, .15), 0xf4c430, 0, .05, 0);
+    add(new THREE.BoxGeometry(.152, .012, .152), 0xe0a81a, 0, .098, 0);
+    [[-.04, .06, .076, .02], [.03, .04, .076, .015], [.045, .075, .076, .012]].forEach(([x, y, z, r]) => add(new THREE.CylinderGeometry(r, r, .006, 8), 0xc99512, x, y, z, { rx: Math.PI / 2 }));
+    [[.076, .05, -.03, .018], [.076, .075, .04, .013]].forEach(([x, y, z, r]) => add(new THREE.CylinderGeometry(r, r, .006, 8), 0xc99512, x, y, z, { rx: Math.PI / 2, ry: Math.PI / 2 }));
+  } else {
+    add(new THREE.BoxGeometry(.17, .02, .17), 0xcfd3d8, 0, .01, 0);
+    [[0, .08], [0, -.08]].forEach(([x, z]) => add(new THREE.BoxGeometry(.17, .05, .014), 0xcfd3d8, x, .04, z));
+    [[.08, 0], [-.08, 0]].forEach(([x, z]) => add(new THREE.BoxGeometry(.014, .05, .17), 0xcfd3d8, x, .04, z));
+    const spots = [[-.04, -.04], [.04, -.04], [-.04, .04], [.04, .04], [0, 0]];
+    spots.forEach(([x, z], i) => {
+      if (kind === 'pepperoni') { add(new THREE.CylinderGeometry(.04, .04, .012, 14), 0xc0392b, x, .03 + (i % 2) * .012, z); add(new THREE.CylinderGeometry(.01, .01, .014, 6), 0x8e2a20, x + .012, .031 + (i % 2) * .012, z); }
+      else if (kind === 'mushroom') { add(new THREE.CylinderGeometry(.012, .016, .04, 8), 0xf1e8d8, x, .04, z); add(new THREE.SphereGeometry(.035, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0xc9b08a, x, .058, z); }
+      else if (kind === 'basil') add(new THREE.SphereGeometry(.04, 10, 6), [0x3c9a4a, 0x2f8a3c, 0x4aa95a][i % 3], x, .035 + (i % 2) * .01, z, { s: [1, .25, .7], ry: i * 1.1 });
+      else if (kind === 'pepper') { const c = [0xe6a817, 0xd9381e, 0x3c9a4a][i % 3]; add(new THREE.SphereGeometry(.036, 10, 8), c, x, .055, z, { s: [1, 1.1, 1] }); add(new THREE.CylinderGeometry(.006, .008, .02, 6), 0x2f6a2a, x, .095, z); }
+    });
+  }
+  return g;
+}
+BINS.forEach(([k, n], i) => { const m = ingMesh(k); m.scale.setScalar(1.35); addStation('pantry', m, -2.55, .9, 1.0 + i * .45, { label: n + ' ($3)', kind: k }); });
 const ovenX = i => -.9 + .6 * i;
 [0, 1, 2, 3].forEach(i => addStation('oven', box(.5, .03, .5, 0x222222), ovenX(i), 1.415, 4.0, { label: 'Oven slot ' + (i + 1), slot: i }));
 const oven = [null, null, null, null];
+function mkDrinks() {
+  const g = new THREE.Group();
+  const b = box(.5, .36, .4, 0x2a7fd4); b.position.y = 0; g.add(b);
+  const lid = box(.52, .04, .42, 0xe8eef5); lid.position.y = .2; g.add(lid);
+  const door = box(.36, .2, .01, 0xbfe3ff); door.position.set(0, -.02, .205); g.add(door);
+  return g;
+}
+function mkBoxes() {
+  const s = new THREE.Group();
+  for (let i = 0; i < 4; i++) { const f = box(.4, .035, .4, i % 2 ? 0xe9d7b0 : 0xf3e6c4); f.position.y = -.05 + i * .037; s.add(f); }
+  const lbl = box(.2, .004, .1, 0xc0392b); lbl.position.set(0, .1, 0); s.add(lbl);
+  return s;
+}
+const DRINK_LABEL = 'Drink cooler ($1, unlocks after stop 1)';
+addStation('drinks', mkDrinks(), 2.25, .9 + .18, -.05, { label: DRINK_LABEL });
+addStation('boxes', mkBoxes(), 2.2, .9 + .1, .55, { label: 'Pizza boxes' });
 
 // ---- truck set-up: movable island table and stations ----
-const MOVABLE = ['board', 'doughbin', 'crate', 'slicer', 'trash', 'pantry'];
+const MOVABLE = ['board', 'doughbin', 'crate', 'slicer', 'trash', 'pantry', 'drinks', 'boxes'];
 stations.forEach(s => { s.dy = s.mesh.position.y - surfaceAt(s.mesh.position.x, s.mesh.position.z); });
 const snap5 = v => Math.round(v * 20) / 20;
 const inRect = (r, x, z, pad = 0) => x > r.x0 - pad && x < r.x1 + pad && z > r.z0 - pad && z < r.z1 + pad;
 function getLayout() {
-  return { i: [+((island.s.x0 + island.s.x1) / 2).toFixed(2), +((island.s.z0 + island.s.z1) / 2).toFixed(2)], s: stations.map(s => MOVABLE.includes(s.type) ? [+s.mesh.position.x.toFixed(2), +s.mesh.position.z.toFixed(2)] : null) };
+  return { i: [+((island.s.x0 + island.s.x1) / 2).toFixed(2), +((island.s.z0 + island.s.z1) / 2).toFixed(2)], s: stations.map(s => MOVABLE.includes(s.type) ? [+s.mesh.position.x.toFixed(2), +s.mesh.position.z.toFixed(2), s.rotA || 0] : null), sh: SHELVES.map(h => [h.cx, h.cz, h.rot]), o: stations.map(s => s.extra && s.active ? 1 : 0), sv: G.shelfN, sl: G.shLv };
 }
 function moveIsland(cx, cz) {
   const old = { ...island.s }, dx = cx - (old.x0 + old.x1) / 2, dz = cz - (old.z0 + old.z1) / 2;
   if (Math.abs(dx) < 1e-3 && Math.abs(dz) < 1e-3) return;
-  for (const s of stations) if (MOVABLE.includes(s.type) && s.type !== 'trash' && inRect(old, s.mesh.position.x, s.mesh.position.z)) { s.mesh.position.x += dx; s.mesh.position.z += dz; }
+  for (const s of stations) if (MOVABLE.includes(s.type) && s.type !== 'trash' && s.active !== false && inRect(old, s.mesh.position.x, s.mesh.position.z)) { s.mesh.position.x += dx; s.mesh.position.z += dz; }
   for (const it of items) if (!it.held && it.loc === 'free' && it.pos.y > .5 && inRect(old, it.pos.x, it.pos.z)) { it.pos.x += dx; it.pos.z += dz; if (it.tgt) { it.tgt.x += dx; it.tgt.z += dz; } }
   for (const r of [island.s, island.b]) { r.x0 += dx; r.x1 += dx; r.z0 += dz; r.z1 += dz; }
   island.mesh.position.x += dx; island.mesh.position.z += dz;
@@ -310,14 +481,65 @@ function moveIsland(cx, cz) {
 function applyLayout(l) {
   if (!l || !Array.isArray(l.i) || !Array.isArray(l.s)) return;
   if (Number.isFinite(l.i[0]) && Number.isFinite(l.i[1])) moveIsland(l.i[0], l.i[1]);
+  if (net.role === 'client' && l.sl && l.sl !== G.shLv) setShelfLevels(l.sl);
+  if (net.role === 'client' && l.sv && l.sv !== G.shelfN) setShelves(l.sv);
+  if (Array.isArray(l.sh)) l.sh.forEach((p, i) => { const h = SHELVES[i]; if (h && p && Number.isFinite(p[0]) && Number.isFinite(p[1])) moveShelf(h, p[0], p[1], p[2] | 0); });
+  if (net.role === 'client' && Array.isArray(l.o)) stations.forEach((s, i) => { if (s.extra && !!l.o[i] !== !!s.active) setActive(s, !!l.o[i]); });
   l.s.forEach((p, i) => {
     const s = stations[i];
     if (!p || !s || !MOVABLE.includes(s.type) || !Number.isFinite(p[0]) || !Number.isFinite(p[1])) return;
     s.mesh.position.set(p[0], surfaceAt(p[0], p[1]) + s.dy, p[1]);
+    if (Number.isFinite(p[2])) setStationRot(s, p[2]);
   });
 }
+// ---- shop: extra stations (all built now, hidden until bought) ----
+const sKey = s => s.type === 'pantry' ? 'pantry:' + s.kind : s.type;
+const SHOP = [
+  { key: 'board', name: 'Kneading board', price: 60, max: 4 },
+  { key: 'slicer', name: 'Cutting board (slicer)', price: 70, max: 3 },
+  { key: 'doughbin', name: 'Dough bin', price: 40, max: 2 },
+  { key: 'boxes', name: 'Pizza boxes', price: 30, max: 2 },
+  { key: 'drinks', name: 'Drink cooler', price: 50, max: 2 },
+  { key: 'crate', name: 'Spring crate', price: 50, max: 4 },
+  { key: 'trash', name: 'Trash can', price: 20, max: 2 },
+  ...BINS.map(([k, n]) => ({ key: 'pantry:' + k, name: 'Extra ' + n.toLowerCase() + ' bin', price: 35, max: 1 })),
+];
+const EXTRA_MK = {
+  board: () => [box(.5, .04, .6, 0xc9a26b), .02, { label: 'Prep board', pizza: null }],
+  slicer: () => [box(.45, .05, .45, 0xdddddd), .03, { label: 'Slicer' }],
+  doughbin: () => [box(.4, .25, .4, 0xe8e0d0), .12, { label: 'Dough bin' }],
+  boxes: () => [mkBoxes(), .1, { label: 'Pizza boxes' }],
+  drinks: () => [mkDrinks(), .18, { label: DRINK_LABEL }],
+  crate: () => [box(.4, .3, .5, 0x4a5a8a), .15, { label: 'Spring crate', items: [] }],
+  trash: () => [box(.3, .4, .3, 0x555555), .2, { label: 'Trash' }],
+};
+for (const it of SHOP) {
+  for (let i = 0; i < it.max; i++) {
+    let mesh, dy, extra, type;
+    if (it.key.startsWith('pantry:')) {
+      const k = it.key.slice(7); type = 'pantry'; mesh = ingMesh(k); mesh.scale.setScalar(1.35); dy = 0; extra = { label: BINS.find(b => b[0] === k)[1] + ' ($3)', kind: k };
+    } else { type = it.key; [mesh, dy, extra] = EXTRA_MK[it.key](); }
+    const s = addStation(type, mesh, 0, .9 + dy, 0, { ...extra, extra: true, active: false, dy });
+    mesh.visible = false;
+  }
+}
+function setActive(s, on) { s.active = on; s.mesh.visible = on; }
+const ownedOf = k => (save.own && save.own[k]) || 0;
+function applyOwned() {
+  const seen = {};
+  for (const s of stations) if (s.extra) { const k = sKey(s); seen[k] = (seen[k] || 0) + 1; setActive(s, seen[k] <= ownedOf(k)); }
+}
+function autoPlace(st) {
+  const cands = [];
+  for (let x = -2.6; x <= 2.6; x += .1) for (let z = -3.1; z <= 3.8; z += .1) cands.push([Math.round(x * 10) / 10, Math.round(z * 10) / 10]);
+  for (const [x, z] of cands) if (!placeErr(st, x, z)) { st.mesh.position.set(x, surfaceAt(x, z) + st.dy, z); return true; }
+  return false;
+}
+function fixExtras() { for (const s of stations) if (s.extra && s.active) { const p = s.mesh.position; if (placeErr(s, p.x, p.z)) autoPlace(s); } }
+setShelfLevels(1 + U('shelfLv')); setShelves(1 + U('shelves'));
 const DEF_LAYOUT = getLayout();
 if (save.layout) applyLayout(save.layout);
+applyOwned(); fixExtras();
 function setupFail(m) { toast(m); return false; }
 function tryMoveIsland(cx, cz) {
   const hw = (island.s.x1 - island.s.x0) / 2, hd = (island.s.z1 - island.s.z0) / 2;
@@ -326,29 +548,47 @@ function tryMoveIsland(cx, cz) {
   if (stations.some(s => s.type === 'trash' && inRect(r, s.mesh.position.x, s.mesh.position.z, .3))) return setupFail('Move the trash can out of the way first');
   moveIsland(cx, cz); return true;
 }
-function tryPlaceStation(st, x, z) {
-  const ground = surfaceAt(x, z);
-  if (st.type === 'trash') {
-    if (ground > 0 || BLOCK.some(b => inRect(b, x, z, .1)) || Math.abs(x) > 2.4 || z < -2.6 || z > 3.6 || Math.hypot(x - STAND.x, z - STAND.z) < .8) return setupFail('The trash can needs open floor');
-  } else if (ground <= 0) return setupFail('That needs a table or counter');
+function placeErr(st, x, z) {
+  const ground = surfaceAt(x, z), openFloor = BLOCK.every(b => !inRect(b, x, z, .1)) && Math.abs(x) <= 2.4 && z >= -2.6 && z <= 3.6 && Math.hypot(x - STAND.x, z - STAND.z) >= .8;
+  if (st.type === 'trash') { if (ground > 0 || !openFloor) return 'The trash can needs open floor'; }
+  else if (ground <= 0 && st.type === 'crate') { if (!openFloor) return 'The crate needs open floor'; }
+  else if (ground <= 0) return 'That needs a table or counter';
   const y = ground + st.dy;
-  if (stations.some(o => o !== st && o.type !== 'seat' && o.type !== 'vent' && o.type !== 'window' && Math.abs(o.mesh.position.x - x) < .4 && Math.abs(o.mesh.position.z - z) < .4 && Math.abs(o.mesh.position.y - y) < .5)) return setupFail('Too close to something else');
-  st.mesh.position.set(x, y, z); return true;
+  if (stations.some(o => o !== st && o.active !== false && o.type !== 'seat' && o.type !== 'vent' && o.type !== 'window' && Math.abs(o.mesh.position.x - x) < .4 && Math.abs(o.mesh.position.z - z) < .4 && Math.abs(o.mesh.position.y - y) < .5)) return 'Too close to something else';
+  return null;
 }
-function clearCarry(p) { if (p.carry) { const m = p.carry === island ? island.mesh : p.carry.mesh; m.material.emissive.setHex(0); p.carry = null; } }
+function tryPlaceStation(st, x, z) {
+  const e = placeErr(st, x, z); if (e) return setupFail(e);
+  st.mesh.position.set(x, surfaceAt(x, z) + st.dy, z); return true;
+}
+function glow(c, hex) { c.mesh.traverse(o => { if (o.material && o.material.emissive) o.material.emissive.setHex(hex); }); }
+function clearCarry(p) {
+  const c = p.carry; if (!c) return;
+  glow(c, 0);
+  if (p.crot) { if (c.shelf) c.g.rotation.y = c.rot * Math.PI / 2; else if (c !== island) c.mesh.rotation.y -= p.crot * Math.PI / 2; }
+  p.crot = 0; p.carry = null;
+}
+function rotateCarry(p, dir) {
+  const c = p.carry; if (!c || c === island) return;
+  p.crot = (p.crot || 0) + dir;
+  (c.shelf ? c.g : c.mesh).rotation.y += dir * Math.PI / 2;
+}
+const shelfOf = o => { for (const h of SHELVES) if (h.g.visible) { for (let q = o; q; q = q.parent) if (q === h.g) return h; } return null; };
 function setupClick() {
   const hit = lookTarget(), p = player;
   if (!p.carry) {
     const st = hit && hit.st;
-    const c = st && MOVABLE.includes(st.type) ? st : hit && hit.env && hit.obj === island.mesh ? island : null;
-    if (!c) { toast('Click a station or the middle table to pick it up'); return; }
+    const c = st && MOVABLE.includes(st.type) ? st : hit && hit.env && hit.obj === island.mesh ? island : hit && hit.env ? shelfOf(hit.obj) : null;
+    if (!c) { toast('Click a station, shelf or the middle table to pick it up'); return; }
     if (players.some(q => q.carry === c)) { toast('Someone else is carrying that'); return; }
-    p.carry = c; (c === island ? island.mesh : c.mesh).material.emissive.setHex(0x665500);
-    toast('Picked up. Click where to put it. Right-click cancels'); return;
+    p.carry = c; p.crot = 0; glow(c, 0x665500);
+    toast('Picked up. Click where to put it. E/Q turn it. Right-click cancels'); return;
   }
   if (!hit || !hit.point) return;
   const c = p.carry, x = snap5(hit.point.x), z = snap5(hit.point.z);
-  if (c === island ? tryMoveIsland(x, z) : tryPlaceStation(c, x, z)) { clearCarry(p); toast('Placed'); }
+  if (c === island) { if (tryMoveIsland(x, z)) { clearCarry(p); toast('Placed'); } return; }
+  if (c.shelf) { if (shelfErr(c, x, z, mod4(c.rot + p.crot)) ? setupFail(shelfErr(c, x, z, mod4(c.rot + p.crot))) : (moveShelf(c, x, z, c.rot + p.crot), true)) { p.crot = 0; clearCarry(p); toast('Placed'); } return; }
+  if (tryPlaceStation(c, x, z)) { c.mesh.rotation.y -= (p.crot || 0) * Math.PI / 2; setStationRot(c, (c.rotA || 0) + (p.crot || 0)); p.crot = 0; clearCarry(p); toast('Placed'); }
 }
 
 // ---- splatters: items left on the floor turn into a mess that must be scrubbed ----
@@ -368,25 +608,45 @@ function makeItemMesh(it) {
   const g = new THREE.Group(); g.userData.item = it;
   const add = (geo, col, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat(col)); m.position.set(x, y, z); m.castShadow = true; g.add(m); return m; };
   if (it.type === 'dough') add(new THREE.SphereGeometry(.09, 12, 10), 0xf3e3b8, 0, .09, 0);
-  else if (it.type === 'jar') { add(new THREE.CylinderGeometry(.06, .06, .14, 12), 0xb02a1d, 0, .07, 0); add(new THREE.CylinderGeometry(.062, .062, .03, 12), 0xdddddd, 0, .155, 0); }
-  else if (it.type === 'cheese') add(new THREE.BoxGeometry(.14, .09, .14), 0xf1c40f, 0, .045, 0);
-  else if (it.type === 'topbox') add(new THREE.BoxGeometry(.14, .08, .14), TOPCOL[it.kind], 0, .04, 0);
+  else if (it.type === 'drink') {
+    add(new THREE.CylinderGeometry(.04, .03, .12, 12), 0xf4f4f4, 0, .06, 0);
+    add(new THREE.CylinderGeometry(.041, .033, .05, 12), 0xd32f2f, 0, .06, 0);
+    add(new THREE.CylinderGeometry(.043, .043, .012, 12), 0x3a8fe0, 0, .126, 0);
+    add(new THREE.CylinderGeometry(.005, .005, .09, 5), 0xffd23f, .012, .17, 0);
+  }
+  else if (it.type === 'jar') g.add(ingMesh('jar'));
+  else if (it.type === 'cheese') g.add(ingMesh('cheese'));
+  else if (it.type === 'topbox') g.add(ingMesh(it.kind));
   else if (it.type === 'pizza') updatePizzaMesh(it, g);
   return g;
 }
 function updatePizzaMesh(it, g = it.mesh) {
   while (g.children.length) g.remove(g.children[0]);
+  if (it.d.boxed) {
+    const bx = (w, h, d, c, y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c)); m.position.y = y; m.castShadow = true; g.add(m); };
+    bx(.5, .04, .5, 0xe9d7b0, .02); bx(.5, .03, .5, 0xf3e6c4, .055); bx(.22, .005, .12, 0xc0392b, .073);
+    return;
+  }
   const p = it.d, r = p.rolls >= 5 ? .22 : .08 + .028 * p.rolls;
   const crust = p.q === 'good' ? 0xd9a441 : p.q === 'burnt' ? 0x2b2b2b : p.q === 'raw' ? 0xf0dcae : 0xf3e3b8;
   const disc = (rad, col, y, h = .012) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, h, 24), mat(col)); m.position.y = y; m.castShadow = true; g.add(m); return m; };
   disc(r, crust, .012, .024);
   if (p.sauce) disc(r * .86, 0xb02a1d, .028);
   if (p.cheese) disc(r * .8, p.q === 'burnt' ? 0x4a3a1a : 0xf5d56a, .037);
-  p.tops.forEach((t, k) => { for (let j = 0; j < 4; j++) { const a = j * 1.57 + k * .6, m = new THREE.Mesh(new THREE.CylinderGeometry(.03, .03, .012, 8), mat(TOPCOL[t])); m.position.set(Math.cos(a) * r * .45, .048, Math.sin(a) * r * .45); g.add(m); } });
+  p.tops.forEach((t, k) => {
+    for (let j = 0; j < 4; j++) {
+      const a = j * 1.57 + k * .6, x = Math.cos(a) * r * .45, z = Math.sin(a) * r * .45;
+      const part = (geo, col, y, sx = 1, sy = 1, sz = 1) => { const m = new THREE.Mesh(geo, mat(col)); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.rotation.y = a * 2; g.add(m); };
+      if (t === 'pepperoni') part(new THREE.CylinderGeometry(.034, .034, .012, 12), 0xc0392b, .048);
+      else if (t === 'mushroom') { part(new THREE.CylinderGeometry(.008, .01, .02, 6), 0xf1e8d8, .046); part(new THREE.SphereGeometry(.026, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), 0xc9b08a, .056); }
+      else if (t === 'basil') part(new THREE.SphereGeometry(.03, 8, 5), 0x3c9a4a, .05, 1, .2, .6);
+      else part(new THREE.TorusGeometry(.024, .008, 5, 10), j % 2 ? 0xd9381e : 0xe6a817, .05, 1, 1, 1);
+    }
+  });
   if (p.sliced) for (let j = 0; j < 3; j++) { const l = new THREE.Mesh(new THREE.BoxGeometry(r * 1.9, .004, .006), mat(0x222222)); l.position.y = .052; l.rotation.y = j * Math.PI / 3; g.add(l); }
 }
 function spawnItem(type, x, z, o = {}) {
-  const it = { id: o.id ?? ++itemId, type, kind: o.kind, pos: new THREE.Vector3(x, o.y ?? surfaceAt(x, z), z), vel: new THREE.Vector3(), held: false, loc: 'free', uses: o.uses ?? 5, onFloor: false, d: o.d };
+  const it = { id: o.id ?? ++itemId, type, kind: o.kind, pos: new THREE.Vector3(x, o.y ?? surfaceAt(x, z), z), vel: new THREE.Vector3(), held: false, loc: 'free', uses: o.uses ?? 5 + U('uses'), onFloor: false, d: o.d };
   if (type === 'pizza') it.d = it.d || { rolls: 0, sauce: false, cheese: false, tops: [], bake: 0, q: null, sliced: false };
   it.mesh = makeItemMesh(it); it.mesh.position.copy(it.pos);
   truck.add(it.mesh); items.push(it); return it;
@@ -396,7 +656,7 @@ function removeItem(it) {
   for (const s of stations) if (s.items) s.items = s.items.filter(i => i !== it);
   truck.remove(it.mesh); const i = items.indexOf(it); if (i >= 0) items.splice(i, 1);
 }
-const itemName = it => it.type === 'pizza' ? 'pizza' : it.type === 'topbox' ? it.kind : it.type === 'jar' ? 'sauce jar' : it.type === 'cheese' ? 'cheese block' : 'dough';
+const itemName = it => it.type === 'pizza' ? 'pizza' : it.type === 'drink' ? 'drink' : it.type === 'topbox' ? it.kind : it.type === 'jar' ? 'sauce jar' : it.type === 'cheese' ? 'cheese block' : 'dough';
 function clearKitchen() {
   while (items.length) removeItem(items[0]);
   stations.forEach(s => { if (s.items) s.items = []; if (s.type === 'board') s.pizza = null; });
@@ -405,7 +665,7 @@ function clearKitchen() {
 }
 function setupKitchen() {
   clearKitchen();
-  const bins = stations.filter(s => s.type === 'doughbin').map(s => s.mesh.position);
+  const bins = stations.filter(s => s.type === 'doughbin' && !s.extra).map(s => s.mesh.position);
   spawnItem('dough', bins[0].x + .25, bins[0].z); spawnItem('dough', bins[0].x - .25, bins[0].z + .2); spawnItem('dough', bins[1].x + .25, bins[1].z);
   spawnItem('jar', 2.1, 1.0); spawnItem('cheese', 2.3, 1.4);
   spawnItem('topbox', 2.1, 2.0, { kind: 'pepperoni' }); spawnItem('topbox', 2.3, 2.2, { kind: 'mushroom' });
@@ -432,15 +692,19 @@ function spawnPlayers() { players.forEach((p, i) => { p.x = SPAWNS[i % 4][0]; p.
 function standUp(p) { if (!p.seated) return; p.seated = false; p.x = STAND.x; p.z = STAND.z; freeSpot(p); toast('Stood up'); sendPose(p); }
 function runAct(p, k) {
   as(p, () => {
-    if (G.mode === 'setup') { if (k === 'use') setupClick(); else if (k === 'throw') clearCarry(p); return; }
+    if (k === 'rearr') { if (G.mode === 'drive') { p.rearr = !p.rearr; clearCarry(p); toast(p.rearr ? 'Rearrange mode ON (T to stop)' : 'Rearrange mode off'); } return; }
+    if ((k === 'rotR' || k === 'rotL') && !(G.mode === 'setup' || (G.mode === 'drive' && p.rearr))) { if (k === 'rotR') interact(); else standUp(p); return; }
+    if (k === 'rotR' || k === 'rotL') { if (p.carry) rotateCarry(p, k === 'rotR' ? 1 : -1); else if (k === 'rotR') { setupClick(); if (G.mode === 'drive') { save.layout = getLayout(); persist(); } } else standUp(p); return; }
+    if (G.mode === 'setup' || (G.mode === 'drive' && p.rearr)) { if (k === 'use') { setupClick(); if (G.mode === 'drive') { save.layout = getLayout(); persist(); } } else if (k === 'throw') clearCarry(p); else if (k === 'stand') standUp(p); return; }
     if (k === 'throw') throwHeld(); else if (k === 'stand') standUp(p); else interact();
   });
 }
-function userAct(k) { if (net.role === 'client') net.sendAct(k); else runAct(me, k); }
+function userAct(k) { if (net.role === 'client') { if (k === 'rearr' && G.mode === 'drive') me.rearr = !me.rearr; net.sendAct(k); } else runAct(me, k); }
+addEventListener('keydown', e => { if (e.code === 'KeyT' && G.mode === 'drive' && !e.repeat && e.target.tagName !== 'INPUT') userAct('rearr'); });
 const ray = new THREE.Raycaster(); ray.far = 2.6;
 function lookTarget() {
   ray.set(eyePos(player), camDir());
-  const targets = [...stations.map(s => s.mesh), ...items.filter(i => !i.held && i.loc === 'free').map(i => i.mesh), ...splats.map(q => q.mesh), ...envMeshes];
+  const targets = [...stations.filter(s => s.active !== false).map(s => s.mesh), ...items.filter(i => !i.held && i.loc === 'free').map(i => i.mesh), ...splats.map(q => q.mesh), ...envMeshes];
   const hits = ray.intersectObjects(targets, true);
   for (const h of hits) {
     let o = h.object;
@@ -484,9 +748,10 @@ stationActs.pantry = st => {
   holdItem(st.kind === 'jar' ? spawnItem('jar', 0, 0) : st.kind === 'cheese' ? spawnItem('cheese', 0, 0) : spawnItem('topbox', 0, 0, { kind: st.kind }));
   return true;
 };
+const crateCap = () => 8 + 2 * U('crate');
 stationActs.crate = st => {
   if (player.held) {
-    if (st.items.length >= 8) { toast('Crate is full'); return true; }
+    if (st.items.length >= crateCap()) { toast('Crate is full'); return true; }
     const it = player.held; player.held = null; it.held = false; it.loc = 'crate'; st.items.push(it); return true;
   }
   if (st.items.length) { holdItem(st.items.pop()); return true; }
@@ -504,7 +769,8 @@ addEventListener('mousemove', e => {
   if (document.pointerLockElement !== $('#gl')) return;
   player.yaw -= e.movementX * .0025; player.pitch = clamp(player.pitch - e.movementY * .0025, -1.3, 1.3);
 });
-addEventListener('keydown', e => { if (e.code === 'KeyE' && document.pointerLockElement === $('#gl')) userAct('use'); });
+const layoutMode = () => G.mode === 'setup' || (G.mode === 'drive' && me.rearr);
+addEventListener('keydown', e => { if (e.code === 'KeyE' && document.pointerLockElement === $('#gl')) userAct(layoutMode() ? 'rotR' : 'use'); });
 
 function stepItems(dt, pax, paz) {
   const clampLock = clampOn() && G.mode === 'drive';
@@ -566,7 +832,7 @@ function placeHeld(p) {
   h.mesh.position.copy(h.pos); h.mesh.rotation.y = p.yaw;
 }
 function syncItemMeshes() {
-  for (const st of stations) if (st.type === 'crate') st.items.forEach((it, i) => it.mesh.position.set(st.mesh.position.x + ((i % 2) - .5) * .16, st.mesh.position.y + .14 + Math.floor(i / 2) * .09, st.mesh.position.z + (Math.floor(i / 4) - .5) * .2));
+  for (const st of stations) if (st.type === 'crate') st.items.forEach((it, i) => it.mesh.position.set(st.mesh.position.x + ((i % 2) - .5) * .16, st.mesh.position.y + .14 + Math.floor(i / 4) * .09, st.mesh.position.z + (Math.floor(i / 2) % 2 - .5) * .2));
   for (const it of items) if (!it.held && it.loc === 'free') it.mesh.position.copy(it.pos);
   for (const b of stations) if (b.type === 'board' && b.pizza) { b.pizza.mesh.position.set(b.mesh.position.x, .94, b.mesh.position.z); b.pizza.mesh.rotation.y = 0; }
   oven.forEach((o, i) => { if (o) o.mesh.position.set(ovenX(i), 1.44, 4.0); });
@@ -582,7 +848,8 @@ function tipFor(hit) {
     if (h.type === 'jar') return 'Click the prep board to spread sauce on rolled dough.';
     if (h.type === 'cheese') return 'Click the prep board (needs sauce first).';
     if (h.type === 'topbox') return 'Click the prep board to add this topping (needs cheese first).';
-    if (h.type === 'pizza') return !h.d.cheese ? 'Finish sauce and cheese, then bake it.' : !h.d.q ? 'Click an oven slot to bake it.' : !h.d.sliced ? 'Click the slicer.' : 'Click the service window to serve it.';
+    if (h.type === 'drink') return 'Click the service window to serve the drink to a customer who ordered one.';
+    if (h.type === 'pizza') return !h.d.cheese ? 'Finish sauce and cheese, then bake it.' : !h.d.q ? 'Click an oven slot to bake it.' : !h.d.sliced ? 'Click the slicer.' : !h.d.boxed ? 'Click the pizza boxes to box it.' : 'Click the service window to serve it.';
     return '';
   }
   switch (st.type) {
@@ -601,9 +868,11 @@ function tipFor(hit) {
       if (!o) return h && h.type === 'pizza' && h.d.cheese ? 'Click to put the pizza in to bake.' : 'Hold a pizza that has sauce and cheese, then click.';
       return o.d.q === 'good' ? 'It is golden! Click with empty hands to take it out now.' : o.d.q === 'burnt' ? 'Burnt! Take it out and throw it in the trash.' : 'Still baking. Take it out when the bar is green and it says ready.';
     }
+    case 'boxes': return h && h.type === 'pizza' ? (h.d.boxed ? 'Already boxed. Take it to the service window.' : h.d.sliced ? 'Click to put the pizza in a box.' : 'Bake and slice it before boxing.') : 'Hold a baked, sliced pizza and click to box it.';
+    case 'drinks': return G.stopIndex < 1 ? 'Locked until you finish your first stop.' : h ? 'Hands must be empty to take a drink.' : 'Click to take a cold drink ($1) for customers who ordered one.';
     case 'slicer': return h && h.type === 'pizza' ? (h.d.q ? 'Click to slice the baked pizza.' : 'Bake it first.') : 'Hold a baked pizza and click to slice it.';
-    case 'window': return h && h.type === 'pizza' ? (h.d.sliced ? 'Click to serve it. It must match an order exactly.' : 'Slice it first.') : 'Hold a baked, sliced pizza and click to serve a customer.';
-    case 'pantry': return h ? 'Hands must be empty. Ingredients cost $3 each.' : 'Click to take one (costs $3). Jars and boxes last 5 uses.';
+    case 'window': if (h && h.type === 'drink') return 'Click to hand over the drink.'; return h && h.type === 'pizza' ? (!h.d.sliced ? 'Slice it first.' : !h.d.boxed ? 'Box it first (pizza boxes).' : 'Click to serve it. It must match an order exactly.') : 'Hold a baked, sliced pizza and click to serve a customer.';
+    case 'pantry': return h ? 'Hands must be empty. Ingredients cost $3 each.' : 'Click to take one (costs $3). Jars and boxes last ' + (5 + U('uses')) + ' uses.';
     case 'crate': return h ? 'Click to stow the item so it can not fall.' : 'Click to take a stowed item out. Stowed items are safe while driving.';
     case 'trash': return h ? 'Click to throw away what you hold.' : 'Hold something you do not want, then click.';
     case 'vent': return drive.steam > 0 ? 'Click NOW to vent the steam!' : 'Click when engine steam appears while driving.';
@@ -613,7 +882,7 @@ function tipFor(hit) {
 }
 function updatePrompt() {
   const hit = lookTarget(); let t = '';
-  const tipText = G.mode === 'setup' ? (player.carry ? 'Click a spot to put it down. Right-click cancels.' : 'Click a station or the middle table to move it.') : tipsOn ? tipFor(hit) : '';
+  const tipText = G.mode === 'setup' || (G.mode === 'drive' && player.rearr) ? (player.carry ? 'Click a spot to put it down. Right-click cancels.' : 'Click a station or the middle table to move it.') : tipsOn ? tipFor(hit) : '';
   $('#tip').textContent = tipText; $('#tip').style.display = tipText ? 'block' : 'none';
   if (hit && hit.st) t = (hit.st.label || hit.st.type) + (player.held ? '  (click to use held ' + itemName(player.held) + ')' : '  (click)');
   else if (hit && hit.splat) t = 'Splatter (click to scrub)';
@@ -622,7 +891,7 @@ function updatePrompt() {
   $('#prompt').textContent = t;
   $('#heldTxt').textContent = player.held ? 'Holding: ' + itemName(player.held) : 'Hands empty';
 }
-const itemColor = it => it.type === 'topbox' ? TOPCOL[it.kind] : it.type === 'jar' ? 0xb02a1d : it.type === 'cheese' ? 0xf1c40f : it.type === 'pizza' ? (it.d.cheese ? 0xf5d56a : it.d.sauce ? 0xb02a1d : 0xf3e3b8) : 0xf3e3b8;
+const itemColor = it => it.type === 'drink' ? 0x3a8fe0 : it.type === 'topbox' ? TOPCOL[it.kind] : it.type === 'jar' ? 0xb02a1d : it.type === 'cheese' ? 0xf1c40f : it.type === 'pizza' ? (it.d.cheese ? 0xf5d56a : it.d.sauce ? 0xb02a1d : 0xf3e3b8) : 0xf3e3b8;
 function tickFloorItems(dt) {
   for (const it of items.slice()) {
     if (it.held || it.loc !== 'free') { it.floorT = 0; continue; }
@@ -663,10 +932,11 @@ for (let i = 0; i < 60; i++) { const d = box(.2, .03, 2.4, 0xffffff); d.position
 // ---- Phase 1: serve customers ----
 const cook = { orders: [], timer: 0, next: 0, served: 0, missed: 0, ids: 0, figs: [], hudT: 0 };
 const ovenSpeed = () => 1 / (16 * (1 - .2 * U('oven')));
-const qOf = b => b < .6 ? 'raw' : b < 1.1 ? 'good' : 'burnt';
+const qOf = b => b < .6 ? 'raw' : b < 1.1 + .15 * U('burn') ? 'good' : 'burnt';
 function newOrder() {
   const k = Object.keys(TOPCOL).sort(() => Math.random() - .5), n = 1 + Math.floor(Math.random() * 3);
-  cook.orders.push({ id: ++cook.ids, tops: k.slice(0, n).sort(), patience: 90, max: 90 });
+  const wait = Math.round(90 * (1 + .15 * U('patience')));
+  cook.orders.push({ id: ++cook.ids, tops: k.slice(0, n).sort(), patience: wait, max: wait, dr: G.stopIndex >= 1 && Math.random() < .6, gd: false, pd: false });
 }
 function syncFigs() {
   while (cook.figs.length > cook.orders.length) scene.remove(cook.figs.pop());
@@ -679,7 +949,7 @@ function syncFigs() {
   cook.figs.forEach((f, i) => f.position.set(3.7, 0, .2 + i * .6));
 }
 function renderOrders() {
-  $('#orders').innerHTML = cook.orders.map(o => `<div class="up" style="padding:6px 8px"><b>#${o.id}</b> ${o.tops.join(' + ')}<div style="height:5px;background:#000;margin-top:3px"><div style="height:5px;width:${100 * o.patience / o.max}%;background:${o.patience < 25 ? '#e8452c' : '#6bd36b'}"></div></div></div>`).join('');
+  $('#orders').innerHTML = cook.orders.map(o => `<div class="up" style="padding:6px 8px"><b>#${o.id}</b> ${o.pd ? '<s>' + o.tops.join(' + ') + '</s> &#10003;' : o.tops.join(' + ')}${o.dr ? (o.gd ? ' | <s>drink</s> &#10003;' : ' | + drink') : ''}<div style="height:5px;background:#000;margin-top:3px"><div style="height:5px;width:${100 * o.patience / o.max}%;background:${o.patience < 25 ? '#e8452c' : '#6bd36b'}"></div></div></div>`).join('');
 }
 stationActs.doughbin = st => { if (player.held) return false; holdItem(spawnItem('dough', 0, 0)); return true; };
 stationActs.board = st => {
@@ -716,22 +986,52 @@ stationActs.slicer = () => {
   if (!h.d.q) { toast('Bake it first'); return true; }
   h.d.sliced = true; updatePizzaMesh(h); toast('Sliced'); return true;
 };
+const finishOrder = o => { cook.orders.splice(cook.orders.indexOf(o), 1); cook.served++; };
 stationActs.window = () => {
-  const h = player.held; if (!h || h.type !== 'pizza') return false;
+  const h = player.held; if (!h || (h.type !== 'pizza' && h.type !== 'drink')) return false;
   if (G.mode !== 'cook') { toast('The hatch is closed while driving'); return true; }
+  if (h.type === 'drink') {
+    const o = cook.orders.find(o => o.dr && !o.gd);
+    if (!o) { toast('Nobody ordered a drink'); return true; }
+    removeItem(h); o.gd = true; G.earned += 6; G.runMoney += 6; toast('Drink served to #' + o.id + '  +$6');
+    if (o.pd) finishOrder(o);
+    syncFigs(); renderOrders(); return true;
+  }
   const d = h.d;
   if (!d.sliced) { toast('Slice it first'); return true; }
-  const o = cook.orders.find(o => [...d.tops].sort().join() === o.tops.join());
+  if (!d.boxed) { toast('Put it in a pizza box first'); return true; }
+  const o = cook.orders.find(o => !o.pd && [...d.tops].sort().join() === o.tops.join());
   removeItem(h);
   if (d.q !== 'good') { toast(d.q === 'raw' ? 'Raw pizza, customer refuses' : 'Burnt pizza, customer refuses'); return true; }
   if (!o) { toast('Nobody ordered that'); return true; }
-  cook.orders.splice(cook.orders.indexOf(o), 1);
   const pay = Math.round(14 + 4 * d.tops.length + 10 * o.patience / o.max);
-  G.earned += pay; G.runMoney += pay; cook.served++; toast('Served #' + o.id + '  +$' + pay);
+  G.earned += pay; G.runMoney += pay; o.pd = true;
+  if (!o.dr || o.gd) { finishOrder(o); toast('Served #' + o.id + '  +$' + pay); } else toast('Pizza for #' + o.id + ' +$' + pay + '. Now their drink!');
   syncFigs(); renderOrders(); return true;
 };
+stationActs.boxes = () => {
+  const h = player.held;
+  if (!h || h.type !== 'pizza') { toast('Hold a baked, sliced pizza and click to box it'); return true; }
+  if (!h.d.q) { toast('Bake it first'); return true; }
+  if (!h.d.sliced) { toast('Slice it first'); return true; }
+  if (h.d.boxed) { toast('Already boxed'); return true; }
+  h.d.boxed = true; updatePizzaMesh(h); toast('Boxed'); return true;
+};
+stationActs.drinks = () => {
+  if (player.held) return false;
+  if (G.stopIndex < 1) { toast('Drinks unlock after your first stop'); return true; }
+  if (G.mode === 'drive') { toast('Cooler locked while driving'); return true; }
+  G.runMoney -= 1; holdItem(spawnItem('drink', 0, 0)); return true;
+};
 
+function showTimer(sec) {
+  const e = $('#bigTimer'); if (sec == null) { e.style.display = 'none'; return; }
+  const s = Math.max(0, Math.ceil(sec));
+  e.style.display = 'block'; e.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  e.style.color = s <= 15 ? '#ff6b5a' : s <= 30 ? '#ffd23f' : '#fff';
+}
 function enterKitchen() {
+  G.shake = 0;
   truck.position.set(0, 0, 0); truck.rotation.set(0, 0, 0);
   players.forEach(p => p.seated = false);
   $('#game').classList.add('on'); topbar(true);
@@ -758,7 +1058,7 @@ modes.setup = {
   exit() { $('#setupBtns').style.display = 'none'; },
 };
 $('#bSetupGo').onclick = () => { if (G.mode === 'setup' && net.role !== 'client') endSetup(); };
-$('#bSetupReset').onclick = () => { if (G.mode === 'setup' && net.role !== 'client') { players.forEach(clearCarry); moveIsland(...DEF_LAYOUT.i); applyLayout(DEF_LAYOUT); toast('Layout reset'); } };
+$('#bSetupReset').onclick = () => { if (G.mode === 'setup' && net.role !== 'client') { players.forEach(clearCarry); moveIsland(...DEF_LAYOUT.i); applyLayout({ i: DEF_LAYOUT.i, s: DEF_LAYOUT.s }); stations.forEach(s => { if (s.extra && s.active) autoPlace(s); }); toast('Layout reset'); } };
 addEventListener('keydown', e => { if (e.code === 'Enter' && G.mode === 'setup' && net.role !== 'client' && e.target.tagName !== 'INPUT') endSetup(); });
 modes.cook = {
   enter() {
@@ -781,6 +1081,7 @@ modes.cook = {
     oven.forEach(o => { if (o) { o.d.bake += dt * ovenSpeed(); const q = qOf(o.d.bake); if (q !== o.d.q) { o.d.q = q; updatePizzaMesh(o); if (q === 'good') toast('A pizza is ready!'); } } });
     cook.hudT -= dt; if (cook.hudT <= 0) { cook.hudT = .25; renderOrders(); }
     updateTop(L.name + ' (stop ' + (G.stopIndex + 1) + ')', 'Time ' + Math.max(0, Math.ceil(cook.timer)) + 's');
+    showTimer(cook.timer); G.shake = 0;
     updateWorld(dt, 0, 0);
     if (cook.timer <= 0 && !cook.over) {
       cook.over = true;
@@ -788,7 +1089,7 @@ modes.cook = {
       else showResult('Stop finished', `Served: ${cook.served}<br>Customers lost: ${cook.missed}<br>Run total: $${G.runMoney}`, 'Close hatch and drive', () => { hideAll(); topbar(true); setMode('drive'); }, true);
     }
   },
-  exit() { for (const f of cook.figs) scene.remove(f); cook.figs = []; },
+  exit() { for (const f of cook.figs) scene.remove(f); cook.figs = []; showTimer(null); },
 };
 
 // ---- Phase 2: drive & dodge (truck stays put, the world scrolls past) ----
@@ -835,7 +1136,7 @@ stationActs.vent = () => {
   if (drive.steam > 0) { drive.steam = 0; toast('Steam vented'); } else toast('Nothing to vent');
   return true;
 };
-addEventListener('keydown', e => { if (e.code === 'KeyQ' && me.seated) userAct('stand'); });
+addEventListener('keydown', e => { if (e.code === 'KeyQ' && (layoutMode() || me.seated)) userAct(layoutMode() ? 'rotL' : 'stand'); });
 
 modes.drive = {
   enter() {
@@ -844,6 +1145,7 @@ modes.drive = {
     clearObst();
     Object.assign(drive, { dist: 0, v: 0, lane: 0, steer: 0, nextObst: 25, steam: 0, steamT: rand(10, 16), lost: 0, done: false });
     items.forEach(it => { it.floorT = 0; });
+    players.forEach(p => { p.rearr = false; });
     drive.total = items.length;
     $('#driveHud').style.display = 'block';
     $('#mirrorFrame').style.display = 'none';
@@ -991,7 +1293,7 @@ function applyPose(p, m) {
 function hostData(e, m) {
   const p = e.player;
   if (m.t === 'in') { applyPose(p, m); p.keys = {}; for (const k of m.k || []) if (KEYLIST.includes(k)) p.keys[k] = true; }
-  else if (m.t === 'act') { applyPose(p, m); if (isRun() && ['use', 'throw', 'stand'].includes(m.k) && !$('#result').classList.contains('on')) runAct(p, m.k); }
+  else if (m.t === 'act') { applyPose(p, m); if (isRun() && ['use', 'throw', 'stand', 'rearr', 'rotR', 'rotL'].includes(m.k) && !$('#result').classList.contains('on')) runAct(p, m.k); }
 }
 function setupHost(peer) {
   peer.on('connection', conn => {
@@ -1044,7 +1346,8 @@ function snapshot() {
     bd: stations.map((st, i) => st.type === 'board' ? [i, idOf(st.pizza)] : null).filter(Boolean), ov: oven.map(idOf),
     sp: splats.map(q => [q.id, +q.x.toFixed(2), +q.z.toFixed(2), q.col, q.hp]),
     pl: players.map(p => ({ i: p.id, n: p.name, c: p.color, x: f(p.x), z: f(p.z), yw: f(p.yaw), pt: f(p.pitch), s: p.seated ? 1 : 0, h: p.held ? p.held.id : -1 })),
-    ck: { o: cook.orders.map(o => ({ id: o.id, tops: o.tops, patience: +o.patience.toFixed(1), max: o.max })), sv: cook.served, ms: cook.missed },
+    si: G.stopIndex, tm: cook.timer,
+    ck: { o: cook.orders.map(o => ({ id: o.id, tops: o.tops, patience: +o.patience.toFixed(1), max: o.max, dr: o.dr, gd: o.gd, pd: o.pd })), sv: cook.served, ms: cook.missed },
     dr: { dist: drive.dist, len: drive.len, v: drive.v, lane: drive.lane, steer: drive.steer, steam: drive.steam, lost: drive.lost, cl: clampFlag ? 1 : 0, ob: drive.obst.map(o => [o.id, f(o.m.position.x), f(o.b), o.pothole ? 1 : 0]) },
   };
 }
@@ -1054,6 +1357,8 @@ function clientEnter(mode) {
   const prev = G.mode; G.mode = mode;
   if (prev === 'drive') { clearObst(); roadMat.visible = false; dashes.forEach(d => d.visible = false); deco.position.set(0, 0, 0); roadMat.position.x = 0; $('#mirrorFrame').style.display = 'none'; }
   if (prev === 'cook') { for (const f of cook.figs) scene.remove(f); cook.figs = []; }
+  if (mode !== 'cook') showTimer(null);
+  G.shake = 0; me.rearr = false;
   if (mode === 'cook' || mode === 'drive' || mode === 'setup') {
     truck.position.set(0, 0, 0); truck.rotation.set(0, 0, 0);
     $('#game').classList.add('on'); topbar(true);
@@ -1069,7 +1374,8 @@ function applySnapshot(s) {
   if (s.mode !== G.mode) clientEnter(s.mode);
   if (s.lay) applyLayout(s.lay);
   if (s.sc !== G.sceneIdx && LOCATIONS[s.sc]) setScenery(LOCATIONS[s.sc]);
-  G.runMoney = s.rm; G.shake = s.sh;
+  G.runMoney = s.rm; G.shake = s.sh; G.stopIndex = s.si || 0; cook.timer = s.tm;
+  showTimer(s.mode === 'cook' ? s.tm : null);
   const byId = new Map(), seen = new Set();
   for (const d of s.items) {
     let it = items.find(i => i.id === d.i);
@@ -1171,6 +1477,14 @@ $('#bLbStart').onclick = () => { if (net.role !== 'host') return; net.inLobby = 
   else if (q.get('host')) setTimeout(() => hostGame(q.get('host').toUpperCase().slice(0, 4)), 300);
 }
 
+// ---- time control: P toggles 1x / 10x ----
+let timeScale = 1;
+addEventListener('keydown', e => {
+  if (e.code !== 'KeyP' || e.repeat || e.target.tagName === 'INPUT' || net.role === 'client') return;
+  timeScale = timeScale === 1 ? 10 : 1;
+  toast(timeScale === 10 ? 'Time: 10x speed' : 'Time: normal speed (1x)'); $('#tbMode').dataset.ts = timeScale === 1 ? '' : ' [10x]';
+});
+
 // ---- main loop ----
 let last = performance.now();
 renderer.setAnimationLoop(() => {
@@ -1178,7 +1492,8 @@ renderer.setAnimationLoop(() => {
   const dt = Math.min(.05, (now - last) / 1000);
   last = now;
   const m = modes[G.mode];
-  if (net.role === 'client') clientFrame(dt); else if (m && m.update) m.update(dt);
+  if (net.role === 'client') clientFrame(dt);
+  else if (m && m.update) { if (timeScale > 1) for (let i = 0; i < timeScale; i++) m.update(dt); else m.update(dt * timeScale); }
   net.tick(dt);
   renderer.render(scene, camera);
   if (m && m.after) m.after();
