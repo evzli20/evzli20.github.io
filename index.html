@@ -28,93 +28,149 @@
             transition: all 0.2s;
         }
         .page-title {
-            font-size: 42px; font-weight: 800; color: #0a2647;
-            text-align: center; margin-bottom: 16px; letter-spacing: 1px;
+            font-size: 42px;
+            font-weight: 800;
+            color: #0a2647;
+            text-align: center;
+            margin-bottom: 16px;
+            letter-spacing: 1px;
         }
         .page-subtitle {
-            text-align: center; color: #4a627a; font-size: 16px;
-            margin-bottom: 40px; border-bottom: 2px solid #e6edf4;
+            text-align: center;
+            color: #4a627a;
+            font-size: 16px;
+            margin-bottom: 40px;
+            border-bottom: 2px solid #e6edf4;
             padding-bottom: 20px;
         }
         .games-container { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
         .game-card {
-            background: #fefefe; border-radius: 24px; padding: 32px 28px;
-            border: 1px solid #e2eaf1; transition: 0.2s;
+            background: #fefefe;
+            border-radius: 24px;
+            padding: 32px 28px;
+            border: 1px solid #e2eaf1;
+            transition: 0.2s;
             box-shadow: 0 2px 8px rgba(0,0,0,0.02);
-            height: 100%; display: flex; flex-direction: column; text-align: center;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            text-align: center;
         }
         .game-card:hover {
-            border-color: #bed2e6; box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.08);
-            background: #ffffff; transform: translateY(-4px);
+            border-color: #bed2e6;
+            box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.08);
+            background: #ffffff;
+            transform: translateY(-4px);
         }
         .game-icon { font-size: 4rem; margin-bottom: 16px; }
         .game-card h2 { font-size: 1.8rem; font-weight: 800; color: #0a3452; margin-bottom: 12px; }
         .game-card p { color: #4a627a; margin-bottom: 24px; line-height: 1.5; font-size: 14px; }
         .play-btn {
-            display: inline-block; background: #1e88e5; color: white; text-decoration: none;
-            padding: 12px 24px; border-radius: 40px; font-weight: 600; font-size: 14px;
-            transition: background 0.2s; width: fit-content; margin: 0 auto;
-            border: none; cursor: pointer;
+            display: inline-block;
+            background: #1e88e5;
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: background 0.2s;
+            width: fit-content;
+            margin: 0 auto;
+            border: none;
+            cursor: pointer;
         }
         .play-btn:hover { background: #156db8; }
         .coming-soon { opacity: 0.7; }
         .coming-soon .play-btn { background: #8899aa; cursor: not-allowed; }
         .visitor-counter {
-            text-align: center; margin-top: 50px; padding-top: 20px;
-            border-top: 1px solid #e2eaf1; font-size: 14px; color: #4a627a; font-weight: 500;
+            text-align: center;
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #e2eaf1;
+            font-size: 14px;
+            color: #4a627a;
+            font-weight: 500;
         }
         .visitor-counter img {
-            vertical-align: middle; margin-left: 8px; border-radius: 8px;
-            background: #f0f4f9; padding: 4px 8px;
+            vertical-align: middle;
+            margin-left: 8px;
+            border-radius: 8px;
+            background: #f0f4f9;
+            padding: 4px 8px;
         }
         .counter-note { font-size: 11px; color: #8899aa; margin-top: 5px; }
 
         /* Rating & Review styles */
         .rating-section {
-            margin-top: 20px; border-top: 1px solid #e2eaf1; padding-top: 16px;
-            text-align: left; font-size: 14px; display: none;
+            margin-top: 20px;
+            border-top: 1px solid #e2eaf1;
+            padding-top: 16px;
+            text-align: left;
+            font-size: 14px;
+            display: none;
         }
         .rating-section.visible { display: block; }
         .toggle-reviews-btn {
-            background: #1e88e5; color: white; border: none; padding: 8px 18px;
-            border-radius: 40px; font-weight: 600; cursor: pointer;
-            margin-top: 16px; font-size: 14px; transition: background 0.2s;
+            background: #1e88e5;
+            color: white;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 40px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 16px;
+            font-size: 14px;
+            transition: background 0.2s;
         }
         .toggle-reviews-btn:hover { background: #156db8; }
         .stars { display: inline-flex; gap: 4px; cursor: pointer; margin: 4px 0; }
         .stars span {
-            font-size: 28px; color: #d1d5db; transition: color 0.1s; user-select: none;
+            font-size: 28px;
+            color: #d1d5db;
+            transition: color 0.1s;
+            user-select: none;
         }
         .stars span.active { color: #fbbf24; }
         .stars span:hover { color: #f59e0b; }
         .rating-display { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
         .avg-rating { font-weight: 700; color: #0a3452; }
-        .review-list { margin: 10px 0; max-height: 150px; overflow-y: auto; }
+        .review-list { margin: 10px 0; max-height: 180px; overflow-y: auto; }
         .review-item {
-            background: #f8fafc; border-radius: 12px; padding: 8px 12px;
-            margin-bottom: 8px; font-size: 13px;
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            font-size: 13px;
         }
         .review-item strong { color: #0a3452; }
         .review-item .date { font-size: 10px; color: #8899aa; margin-left: 6px; }
         .review-form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
         .review-form input, .review-form textarea {
-            padding: 8px 12px; border-radius: 30px; border: 1px solid #d1d5db;
-            font-family: inherit; font-size: 13px; background: white; width: 100%;
+            padding: 8px 12px;
+            border-radius: 30px;
+            border: 1px solid #d1d5db;
+            font-family: inherit;
+            font-size: 13px;
+            background: white;
+            width: 100%;
         }
         .review-form textarea { border-radius: 16px; resize: vertical; min-height: 50px; }
         .review-form button {
-            background: #1e88e5; color: white; border: none; padding: 8px 16px;
-            border-radius: 40px; font-weight: 600; cursor: pointer; align-self: flex-start;
+            background: #1e88e5;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-weight: 600;
+            cursor: pointer;
+            align-self: flex-start;
         }
         .review-form button:hover { background: #156db8; }
         .review-form button:disabled { background: #8899aa; cursor: wait; }
         .no-reviews { color: #8899aa; font-style: italic; font-size: 13px; }
         .loading-reviews { color: #8899aa; font-style: italic; font-size: 13px; }
-        .clear-ratings-btn {
-            background: #ef4444; color: white; border: none; padding: 4px 12px;
-            border-radius: 30px; font-size: 11px; cursor: pointer; margin-left: 12px;
-        }
-        .clear-ratings-btn:hover { background: #dc2626; }
+        .error-msg { color: #dc2626; font-size: 12px; font-style: italic; }
 
         @media (max-width: 860px) {
             .container { padding: 28px; margin: 20px; }
@@ -137,9 +193,7 @@
             <p>A game about catching falling objects while using a train</p>
             <a href="StrayCargo.html" target="_blank" class="play-btn">Launch App →</a>
             <button class="toggle-reviews-btn" data-target="ratings-straycargo">📝 Review</button>
-            <div class="rating-section" id="ratings-straycargo">
-                <div class="loading-reviews">Loading reviews from cloud...</div>
-            </div>
+            <div class="rating-section" id="ratings-straycargo"></div>
         </div>
 
         <!-- Metropolis Forge -->
@@ -149,33 +203,62 @@
             <p>City building game</p>
             <a href="MetropolisForge.html" target="_blank" class="play-btn">Launch App →</a>
             <button class="toggle-reviews-btn" data-target="ratings-metropolisforge">📝 Review</button>
-            <div class="rating-section" id="ratings-metropolisforge">
-                <div class="loading-reviews">Loading reviews from cloud...</div>
-            </div>
+            <div class="rating-section" id="ratings-metropolisforge"></div>
         </div>
 
         <!-- Circlehead Hero -->
         <div class="game-card" data-game-id="circleheadhero">
             <div class="game-icon">⚔️</div>
             <h2>Circlehead Hero</h2>
-            <p>A turn‑based dungeon crawler. Defeat enemies, collect weapons & potions, fight bosses every 10 rooms. WASD to move, SPACEBAR to heal.</p>
+            <p>A turn‑based dungeon crawler. Defeat enemies, and collect weapons.</p>
             <a href="CircleheadHero.html" target="_blank" class="play-btn">Launch App →</a>
             <button class="toggle-reviews-btn" data-target="ratings-circleheadhero">📝 Review</button>
-            <div class="rating-section" id="ratings-circleheadhero">
-                <div class="loading-reviews">Loading reviews from cloud...</div>
-            </div>
+            <div class="rating-section" id="ratings-circleheadhero"></div>
+        </div>
+
+        <!-- Word Pusher -->
+        <div class="game-card" data-game-id="wordpusher">
+            <div class="game-icon">🔤</div>
+            <h2>Word Pusher</h2>
+            <p>Push, pull, and puzzle your way through letter-filled mazes!</p>
+            <br>
+            <a href="WordPusher.html" target="_blank" class="play-btn">Launch App →</a>
+            <button class="toggle-reviews-btn" data-target="ratings-wordpusher">📝 Review</button>
+            <div class="rating-section" id="ratings-wordpusher"></div>
+        </div>
+
+        <!-- artest -->
+        <div class="game-card" data-game-id="artest">
+            <div class="game-icon">😶‍🌫️</div>
+            <h2>artest</h2>
+            <p>test</p>
+            <br>
+            <a href="Artest.html" target="_blank" class="play-btn">Launch App →</a>
+            <button class="toggle-reviews-btn" data-target="ratings-artest">📝 Review</button>
+            <div class="rating-section" id="ratings-artest"></div>
+        </div>
+
+        <!-- Granola Defence -->
+        <div class="game-card" data-game-id="granoladefence">
+            <div class="game-icon">🫘</div>
+            <h2>Granola Defence (web version)</h2>
+            <p>Defend the granola vault from attacking robbers</p>
+            <br>
+            <a href="GranolaDefence.html" target="_blank" class="play-btn">Launch App →</a>
+            <button class="toggle-reviews-btn" data-target="ratings-granoladefence">📝 Review</button>
+            <div class="rating-section" id="ratings-granoladefence"></div>
         </div>
 
         <!-- Coming Soon -->
         <div class="game-card coming-soon">
             <div class="game-icon">❓</div>
-            <h2>Quiz Challenge</h2>
-            <p>Test your knowledge with interactive quizzes. Coming soon!</p>
+            <h2>Unknown</h2>
+            <p>Coming soon!</p>
             <button class="play-btn" disabled>Coming Soon</button>
         </div>
     </div>
 
-    <!-- VISITOR COUNTER (image-based, no CORS issues) -->
+    <!-- VISITOR COUNTER (image-based) -->
     <div class="visitor-counter">
         🌍 Total global visits:
         <a href="https://www.hitwebcounter.com/" target="_blank" rel="noopener">
@@ -185,179 +268,249 @@
     </div>
 </div>
 
-<!-- Firebase SDK (Modular v9) -->
+<!-- Firebase SDK (Modular v10) + review system -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs, query, orderBy, serverTimestamp, deleteDoc, doc, writeBatch, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import {
+        getFirestore,
+        collection,
+        addDoc,
+        onSnapshot,
+        query,
+        where,
+        serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    // --- REPLACE WITH YOUR FIREBASE CONFIG ---
+    // ========================================================
+    // STEP 1: REPLACE THE VALUES BELOW WITH YOUR FIREBASE CONFIG
+    // (Firebase Console → Project Settings → Your apps → Config)
+    // ========================================================
+    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
     const firebaseConfig = {
-        apiKey: "YOUR_API_KEY",
-        authDomain: "YOUR_PROJECT.firebaseapp.com",
-        projectId: "YOUR_PROJECT_ID",
-        storageBucket: "YOUR_PROJECT.appspot.com",
-        messagingSenderId: "YOUR_SENDER_ID",
-        appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyBucR3SoS21qKKPNtJOEGZoBVZBcL4fZbY",
+      authDomain: "game-fad8e.firebaseapp.com",
+      projectId: "game-fad8e",
+      storageBucket: "game-fad8e.firebasestorage.app",
+      messagingSenderId: "935310984011",
+      appId: "1:935310984011:web:e5875551ed59948df89ece",
+      measurementId: "G-N3PXX62WCN"
     };
 
-    // Initialize Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // --- Rating & Review System (Global, Firestore) ---
-    (function() {
-        const GAME_IDS = ['straycargo', 'metropolisforge', 'circleheadhero'];
-        const REVIEWS_COLLECTION = 'game_reviews'; // Single collection for all reviews
+    // ==========================================
+    // RATING & REVIEW SYSTEM (global, real-time)
+    // ==========================================
+    const REVIEWS_COLLECTION = 'game_reviews';
+    const initializedSections = new Set();
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text == null ? '' : String(text);
+        return div.innerHTML;
+    }
+
+    // Render star HTML based on ratings
+    function renderStarsHTML(ratings) {
+        const avg = ratings.length
+            ? ratings.reduce((a, b) => a + b, 0) / ratings.length
+            : 0;
+        let html = '';
+        for (let i = 1; i <= 5; i++) {
+            const active = i <= Math.round(avg) ? 'active' : '';
+            html += `<span data-value="${i}" class="${active}">★</span>`;
         }
+        return html;
+    }
 
-        function getAvg(ratings) {
-            return ratings.length ? ratings.reduce((a,b)=>a+b,0)/ratings.length : 0;
+    // Render the review list (newest first)
+    function renderReviewListHTML(reviews) {
+        if (reviews.length === 0) {
+            return '<div class="no-reviews">No reviews yet. Be the first!</div>';
         }
+        // Show up to 10 most recent
+        return reviews.slice(0, 10).map(r => {
+            const dateStr = r._dateString || 'Just now';
+            const comment = r.comment || '';
+            const name = r.name || 'Anonymous';
+            return `<div class="review-item">
+                        <strong>${escapeHtml(name)}</strong>
+                        <span class="date">${escapeHtml(dateStr)}</span>
+                        <br>${escapeHtml(comment)}
+                    </div>`;
+        }).join('');
+    }
 
-        function renderStarsHTML(ratings) {
-            const avg = getAvg(ratings);
-            return [1,2,3,4,5].map(i => 
-                `<span data-value="${i}" class="${i <= Math.round(avg) ? 'active' : ''}">★</span>`
-            ).join('');
-        }
+    // Initialize a game's review section (once)
+    function initSection(gameId) {
+        const container = document.getElementById(`ratings-${gameId}`);
+        if (!container) return;
 
-        function renderReviewListHTML(reviews) {
-            if (reviews.length === 0) return '<div class="no-reviews">No reviews yet. Be the first!</div>';
-            return reviews.map(r => 
-                `<div class="review-item"><strong>${escapeHtml(r.name)}</strong> <span class="date">${r.dateString}</span><br>${escapeHtml(r.comment)}</div>`
-            ).join('');
-        }
+        // Don't re-render UI structure after first initialization
+        if (initializedSections.has(gameId)) return;
+        initializedSections.add(gameId);
 
-        async function fetchReviewsForGame(gameId) {
-            const reviewsRef = collection(db, REVIEWS_COLLECTION);
-            const q = query(reviewsRef, orderBy('createdAt', 'desc'));
-            const querySnapshot = await getDocs(q);
-            const allReviews = [];
-            querySnapshot.forEach((doc) => {
-                const data = doc.data();
-                if (data.gameId === gameId) {
-                    allReviews.push({ id: doc.id, ...data });
-                }
-            });
-            return allReviews;
-        }
+        // Build the initial UI
+        container.innerHTML = `
+            <div class="rating-display">
+                <div class="stars" data-game-id="${gameId}">${renderStarsHTML([])}</div>
+                <span class="avg-rating" id="avg-${gameId}">0.0 / 5</span>
+                <span style="color:#8899aa;font-size:13px;" id="count-${gameId}">(0 ratings)</span>
+            </div>
+            <div class="review-list" id="reviews-${gameId}">
+                <div class="loading-reviews">Loading reviews from cloud...</div>
+            </div>
+            <div class="review-form">
+                <input type="text" id="review-name-${gameId}" placeholder="Your name" maxlength="30" />
+                <textarea id="review-comment-${gameId}" placeholder="Write a review..." rows="2"></textarea>
+                <button class="submit-review" data-game-id="${gameId}">Submit Review</button>
+            </div>
+        `;
 
-        async function initSection(gameId) {
-            const container = document.getElementById(`ratings-${gameId}`);
-            if (!container) return;
+        // ---- Star click: saves a rating doc ----
+        // Use delegation on the stars container (survives innerHTML updates)
+        container.querySelector('.stars').addEventListener('click', async function(e) {
+            const star = e.target.closest('span');
+            if (!star) return;
+            const val = parseInt(star.dataset.value, 10);
+            if (!val) return;
+
+            const nameInput = document.getElementById(`review-name-${gameId}`);
+            const name = (nameInput?.value || '').trim() || 'Anonymous';
 
             try {
-                const reviews = await fetchReviewsForGame(gameId);
-                const ratings = reviews.map(r => r.rating).filter(r => typeof r === 'number');
-                const avg = getAvg(ratings);
-
-                container.innerHTML = `
-                    <div class="rating-display">
-                        <div class="stars" data-game-id="${gameId}">${renderStarsHTML(ratings)}</div>
-                        <span class="avg-rating" id="avg-${gameId}">${avg.toFixed(1)} / 5</span>
-                        <span style="color:#8899aa;font-size:13px;" id="count-${gameId}">(${ratings.length} ratings)</span>
-                    </div>
-                    <div class="review-list" id="reviews-${gameId}">${renderReviewListHTML(reviews)}</div>
-                    <div class="review-form">
-                        <input type="text" id="review-name-${gameId}" placeholder="Your name" maxlength="30" />
-                        <textarea id="review-comment-${gameId}" placeholder="Write a review..." rows="2"></textarea>
-                        <button class="submit-review" data-game-id="${gameId}">Submit Review</button>
-                    </div>
-                `;
-
-                // Attach star click listener (saves a review with a rating, no comment)
-                container.querySelectorAll('.stars span').forEach(star => {
-                    star.addEventListener('click', async function(e) {
-                        e.stopPropagation();
-                        const val = parseInt(this.dataset.value);
-                        const nameInput = document.getElementById(`review-name-${gameId}`);
-                        const name = nameInput.value.trim() || 'Anonymous';
-                        
-                        try {
-                            await addDoc(collection(db, REVIEWS_COLLECTION), {
-                                gameId: gameId,
-                                rating: val,
-                                name: name,
-                                comment: 'Rated via star click',
-                                createdAt: serverTimestamp(),
-                                dateString: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-                            });
-                            
-                            // Refresh the section to reflect the new rating
-                            await initSection(gameId);
-                        } catch (error) {
-                            console.error('Error adding rating: ', error);
-                            alert('Failed to save rating. Please try again.');
-                        }
-                    });
+                await addDoc(collection(db, REVIEWS_COLLECTION), {
+                    gameId: gameId,
+                    rating: val,
+                    name: name,
+                    comment: `Rated ${val} star${val > 1 ? 's' : ''}`,
+                    createdAt: serverTimestamp()
                 });
-
-                // Attach submit review listener
-                container.querySelector('.submit-review').addEventListener('click', async function() {
-                    const nameInput = document.getElementById(`review-name-${gameId}`);
-                    const commentInput = document.getElementById(`review-comment-${gameId}`);
-                    const name = nameInput.value.trim();
-                    const comment = commentInput.value.trim();
-                    if (!name || !comment) {
-                        alert('Please fill in both name and comment.');
-                        return;
-                    }
-                    
-                    this.disabled = true;
-                    this.textContent = 'Saving...';
-                    
-                    try {
-                        await addDoc(collection(db, REVIEWS_COLLECTION), {
-                            gameId: gameId,
-                            rating: 0, // A text-only review has no star rating
-                            name: name,
-                            comment: comment,
-                            createdAt: serverTimestamp(),
-                            dateString: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-                        });
-                        
-                        // Refresh the section to show the new review
-                        await initSection(gameId);
-                    } catch (error) {
-                        console.error('Error adding review: ', error);
-                        alert('Failed to save review. Please try again.');
-                        this.disabled = false;
-                        this.textContent = 'Submit Review';
-                    }
-                });
-
+                // No need to refresh manually — onSnapshot handles it
             } catch (error) {
-                console.error('Error initializing section: ', error);
-                container.innerHTML = '<div class="no-reviews">Could not load reviews. Please refresh.</div>';
+                console.error('Error adding rating:', error);
+                alert('Failed to save rating. Check your internet connection and try again.');
             }
-        }
+        });
 
-        // Initialize all sections on page load
-        GAME_IDS.forEach(initSection);
+        // ---- Submit review: saves a text review doc ----
+        container.querySelector('.submit-review').addEventListener('click', async function() {
+            const nameInput = document.getElementById(`review-name-${gameId}`);
+            const commentInput = document.getElementById(`review-comment-${gameId}`);
+            const name = (nameInput?.value || '').trim();
+            const comment = (commentInput?.value || '').trim();
 
-        // Toggle button handlers
-        document.querySelectorAll('.toggle-reviews-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const targetId = this.dataset.target;
-                const section = document.getElementById(targetId);
-                if (!section) return;
-                
-                const isVisible = section.classList.contains('visible');
-                if (isVisible) {
-                    section.classList.remove('visible');
-                    this.textContent = '📝 Review';
-                } else {
-                    section.classList.add('visible');
-                    this.textContent = '✖ Hide Reviews';
+            if (!name || !comment) {
+                alert('Please fill in both name and comment.');
+                return;
+            }
+
+            this.disabled = true;
+            this.textContent = 'Saving...';
+
+            try {
+                await addDoc(collection(db, REVIEWS_COLLECTION), {
+                    gameId: gameId,
+                    rating: 0, // Text-only review, no star rating
+                    name: name,
+                    comment: comment,
+                    createdAt: serverTimestamp()
+                });
+                nameInput.value = '';
+                commentInput.value = '';
+            } catch (error) {
+                console.error('Error adding review:', error);
+                alert('Failed to save review. Check your internet connection and try again.');
+            } finally {
+                this.disabled = false;
+                this.textContent = 'Submit Review';
+            }
+        });
+
+        // ---- Real-time listener: keeps reviews in sync for every visitor ----
+        const q = query(
+            collection(db, REVIEWS_COLLECTION),
+            where('gameId', '==', gameId)
+        );
+
+        onSnapshot(q, (snapshot) => {
+            const reviews = [];
+            const ratings = [];
+
+            snapshot.forEach((docSnap) => {
+                const data = docSnap.data();
+                // Format timestamp
+                let dateString = 'Just now';
+                if (data.createdAt && typeof data.createdAt.toDate === 'function') {
+                    dateString = data.createdAt.toDate().toLocaleDateString('en-US', {
+                        year: 'numeric', month: 'short', day: 'numeric'
+                    });
+                }
+                const entry = { ...data, _dateString: dateString };
+                reviews.push(entry);
+                if (typeof data.rating === 'number' && data.rating > 0) {
+                    ratings.push(data.rating);
                 }
             });
+
+            // Sort newest first (client-side, avoids Firestore index)
+            reviews.sort((a, b) => {
+                const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+                const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+                return bTime - aTime;
+            });
+
+            const avg = ratings.length
+                ? ratings.reduce((a, b) => a + b, 0) / ratings.length
+                : 0;
+
+            // Update UI
+            const starsEl = container.querySelector('.stars');
+            if (starsEl) starsEl.innerHTML = renderStarsHTML(ratings);
+
+            const avgEl = container.querySelector(`#avg-${gameId}`);
+            if (avgEl) avgEl.textContent = avg.toFixed(1) + ' / 5';
+
+            const countEl = container.querySelector(`#count-${gameId}`);
+            if (countEl) countEl.textContent = `(${ratings.length} ratings)`;
+
+            const reviewsEl = container.querySelector(`#reviews-${gameId}`);
+            if (reviewsEl) reviewsEl.innerHTML = renderReviewListHTML(reviews);
+
+        }, (error) => {
+            console.error('Firestore snapshot error:', error);
+            const reviewsEl = document.getElementById(`reviews-${gameId}`);
+            if (reviewsEl) {
+                reviewsEl.innerHTML = `<div class="error-msg">
+                    Could not load reviews. Check that your Firestore rules allow reads.
+                </div>`;
+            }
         });
-    })();
+    }
+
+    // ---- Toggle buttons: show/hide review section ----
+    document.querySelectorAll('.toggle-reviews-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const targetId = this.dataset.target;
+            const section = document.getElementById(targetId);
+            if (!section) return;
+
+            const isVisible = section.classList.contains('visible');
+            if (isVisible) {
+                section.classList.remove('visible');
+                this.textContent = '📝 Review';
+            } else {
+                section.classList.add('visible');
+                this.textContent = '✖ Hide Reviews';
+                // Extract gameId from section ID
+                const gameId = targetId.replace('ratings-', '');
+                initSection(gameId);
+            }
+        });
+    });
 </script>
+
 </body>
 </html>
