@@ -209,12 +209,66 @@ function box(w, h, d, c) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 
 const truck = new THREE.Group();
 scene.add(truck);
 
+// Build exterior for the menu
+const extTruck = new THREE.Group();
+scene.add(extTruck);
+
+const redMat = mat(0xe8452c);
+const darkRedMat = mat(0x8f2412);
+const metalMat = mat(0xaaaaaa);
+const glassMat = new THREE.MeshStandardMaterial({ color: 0x88ccff, transparent: true, opacity: 0.6, roughness: 0.1 });
+const tireMat = mat(0x222222);
+
+// Chassis
+const chassis = box(5.6, 0.4, 9.4, 0x333333); chassis.position.set(0, 0.4, 0); extTruck.add(chassis);
+
+// Main body (wraps the kitchen)
+const leftWall = box(0.1, 2.4, 9.4, 0xe8452c); leftWall.position.set(-2.85, 1.2, 0); extTruck.add(leftWall);
+const rw1 = box(0.1, 0.8, 9.4, 0xe8452c); rw1.position.set(2.85, 0.4, 0); extTruck.add(rw1);
+const rw2 = box(0.1, 0.6, 9.4, 0xe8452c); rw2.position.set(2.85, 2.1, 0); extTruck.add(rw2);
+const rw3 = box(0.1, 1.0, 6.4, 0xe8452c); rw3.position.set(2.85, 1.4, -1.5); extTruck.add(rw3);
+const rw4 = box(0.1, 1.0, 2.0, 0xe8452c); rw4.position.set(2.85, 1.4, 3.7); extTruck.add(rw4);
+
+const back = box(5.8, 2.4, 0.1, 0xe8452c); back.position.set(0, 1.2, -4.75); extTruck.add(back);
+const cab = box(5.8, 1.8, 2.5, 0xe8452c); cab.position.set(0, 0.9, 5.5); extTruck.add(cab);
+const windshield = box(4.8, 0.8, 0.1, 0x88ccff); windshield.position.set(0, 1.5, 6.8); extTruck.add(windshield);
+const roof = box(6.0, 0.1, 10.0, 0xcccccc); roof.position.set(0, 2.45, 0.5); extTruck.add(roof);
+
+const wheelGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.4, 16); wheelGeo.rotateZ(Math.PI/2);
+[[-2.9, -2.5], [2.9, -2.5], [-2.9, 4.5], [2.9, 4.5]].forEach(([x, z]) => {
+  const w = new THREE.Mesh(wheelGeo, tireMat); w.position.set(x, 0.6, z); w.castShadow = true; extTruck.add(w);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.42, 8), metalMat); hub.rotation.z = Math.PI/2; hub.position.set(x, 0.6, z); extTruck.add(hub);
+});
+
+const awning = new THREE.Group();
+for (let i = 0; i < 6; i++) {
+  const stripe = box(0.5, 0.05, 1.0, i % 2 ? 0xffffff : 0xe8452c);
+  stripe.position.set(-1.25 + i * 0.5, 0, 0);
+  awning.add(stripe);
+}
+awning.position.set(2.9, 2.2, 1.0);
+awning.rotation.z = -0.2;
+extTruck.add(awning);
+
+const signBase = box(3.0, 0.8, 0.3, 0xffcf4a); signBase.position.set(0, 2.9, 0); extTruck.add(signBase);
+const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+const g = c.getContext('2d');
+g.fillStyle = '#ffcf4a'; g.fillRect(0,0,512,128);
+g.fillStyle = '#e8452c'; g.font = '900 80px Fredoka, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+g.fillText('PIZZA', 256, 64);
+const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+const signMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.7), new THREE.MeshBasicMaterial({ map: tex }));
+signMesh.position.set(0, 2.9, 0.16); extTruck.add(signMesh);
+const signMesh2 = signMesh.clone(); signMesh2.position.z = -0.16; signMesh2.rotation.y = Math.PI; extTruck.add(signMesh2);
+
 // ---- game state / mode dispatcher ----
 const G = { mode: 'menu', stopIndex: 0, earned: 0, cargoBonus: 0, runMoney: 0 };
 const modes = {};   // name -> { enter(), update(dt), exit() }
 function setMode(name) {
   if (modes[G.mode] && modes[G.mode].exit) modes[G.mode].exit();
   G.mode = name;
+  extTruck.visible = (name === 'menu');
+  truck.visible = (name !== 'menu');
   if (modes[name] && modes[name].enter) modes[name].enter();
 }
 const LOCATIONS = [
@@ -290,11 +344,11 @@ addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') 
 addEventListener('keyup', e => { keys[e.code] = false; });
 
 modes.menu = {
-  enter() { truck.position.set(0, 0, 0); truck.rotation.set(0, 0, 0); },
+  enter() { extTruck.position.set(0, 0, 0); extTruck.rotation.set(0, 0, 0); },
   update(dt) {
     const t = performance.now() / 1000;
-    truck.rotation.y = t * .4;
-    camera.position.set(Math.sin(t * .2) * 3, 6, 18);
+    extTruck.rotation.y = t * .3;
+    camera.position.set(Math.sin(t * .2) * 8, 5, 18);
     camera.lookAt(0, 1.5, 0);
   },
 };
@@ -305,7 +359,7 @@ const SURF = [], BLOCK = [], stations = [], items = [], envMeshes = [];
 let itemId = 0;
 function part(w, h, d, x, y, z, c) { const m = box(w, h, d, c); m.position.set(x, y, z); truck.add(m); envMeshes.push(m); return m; }
 function counter(x0, x1, z0, z1, top, col) { const mesh = part(x1 - x0, top, z1 - z0, (x0 + x1) / 2, top / 2, (z0 + z1) / 2, col), s = { x0, x1, z0, z1, top }, b = { x0, x1, z0, z1 }; SURF.push(s); BLOCK.push(b); return { mesh, s, b }; }
-function surfaceAt(x, z) { let t = 0; for (const s of SURF) if (x >= s.x0 && x <= s.x1 && z >= s.z0 && z <= s.z1 && s.top > t) t = s.top; return t; }
+function surfaceAt(x, z, yHint = 999) { let t = 0; for (const s of SURF) if (x >= s.x0 && x <= s.x1 && z >= s.z0 && z <= s.z1 && s.top > t && s.top <= yHint + 0.1) t = s.top; return t; }
 function addStation(type, mesh, x, y, z, extra = {}) {
   mesh.position.set(x, y, z); truck.add(mesh);
   const st = { type, mesh, ...extra }; mesh.userData.st = st; stations.push(st); return st;
@@ -327,7 +381,7 @@ counter(-2.7, -1.9, -3.2, 3.9, .9, 0x8a6a4a);
 counter(1.9, 2.7, -2.0, 3.9, .9, 0x8a6a4a);
 counter(-1.4, 1.4, 3.7, 4.4, 1.4, 0x444444);
 const island = counter(-.8, .8, -1.5, .1, .9, 0x8a6a4a);
-const SH_W = .85, SH_D = .45, SH_RISE = .32;
+const SH_W = .8, SH_D = .4, SH_T = .03, SH_RISE = .35;
 let shLv = 1;
 const SHELVES = [[2.15, -4.0], [1.2, -4.0], [.25, -4.0]].map(([cx, cz]) => {
   const g = new THREE.Group();
@@ -338,22 +392,21 @@ const mod4 = n => ((n % 4) + 4) % 4;
 function shelfRect(x, z, rot) { const w = rot & 1 ? SH_D : SH_W, d = rot & 1 ? SH_W : SH_D; return { x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 }; }
 function buildShelfMesh(sh) {
   while (sh.g.children.length) sh.g.remove(sh.g.children[0]);
-  const H0 = 1.1;
-  const totalH = shLv * SH_RISE + .05;
+  const totalH = 0.05 + shLv * SH_RISE + 0.05;
   
   const back = box(SH_W, totalH, .02, 0xb08a5a);
-  back.position.set(0, H0 + totalH/2, -SH_D/2 + .01);
+  back.position.set(0, totalH/2, -SH_D/2 + .01);
   sh.g.add(back);
   
   [-1, 1].forEach(sx => {
-    const side = box(.03, totalH, SH_D, 0x7a5a3a);
-    side.position.set(sx * (SH_W/2 - .015), H0 + totalH/2, 0);
+    const side = box(SH_T, totalH, SH_D, 0x7a5a3a);
+    side.position.set(sx * (SH_W/2 - SH_T/2), totalH/2, 0);
     sh.g.add(side);
   });
   
   for (let i = 0; i <= shLv; i++) {
-    const y = H0 + i * SH_RISE;
-    const m = box(SH_W - .06, .03, SH_D - .02, 0x8a6a46);
+    const y = 0.05 + i * SH_RISE;
+    const m = box(SH_W - SH_T*2, SH_T, SH_D - .02, 0x8a6a46);
     m.position.set(0, y, .01);
     sh.g.add(m);
   }
@@ -367,7 +420,7 @@ function updateShelfSurf(sh) {
   BLOCK.push(sh.b);
   
   const th = sh.rot * Math.PI / 2, c = Math.cos(th), sn = Math.sin(th);
-  const w = SH_W - .06, d = SH_D - .02;
+  const w = SH_W - SH_T*2, d = SH_D - .02;
   const corners = [
     [-w/2, -d/2], [w/2, -d/2], [-w/2, d/2], [w/2, d/2]
   ].map(([lx, lz]) => [sh.cx + lx * c + lz * sn, sh.cz - lx * sn + lz * c]);
@@ -377,13 +430,19 @@ function updateShelfSurf(sh) {
   const z0 = Math.min(...zs), z1 = Math.max(...zs);
 
   for (let i = 0; i <= shLv; i++) {
-    const t = { x0, x1, z0, z1, top: 1.1 + i * SH_RISE + .015 };
+    const t = { x0, x1, z0, z1, top: 0.05 + i * SH_RISE + SH_T/2 + .005 };
     sh.tiers.push(t); SURF.push(t);
   }
 }
 function setShelfLevels(n) {
   shLv = n; G.shLv = n;
   SHELVES.forEach(sh => { buildShelfMesh(sh); if (sh.g.visible && net.role !== 'client' && shelfErr(sh, sh.cx, sh.cz, sh.rot)) autoPlaceShelf(sh); updateShelfSurf(sh); });
+  for (const it of items) {
+    if (!it.held && it.loc === 'free') {
+       const g = surfaceAt(it.pos.x, it.pos.z, it.pos.y + 0.1);
+       if (it.pos.y < g) it.pos.y = g;
+    }
+  }
 }
 function shelfErr(sh, x, z, rot) {
   const r = shelfRect(x, z, rot);
@@ -586,18 +645,18 @@ function tryMoveIsland(cx, cz) {
   if (stations.some(s => s.type === 'trash' && inRect(r, s.mesh.position.x, s.mesh.position.z, .3))) return setupFail('Move the trash can out of the way first');
   moveIsland(cx, cz); return true;
 }
-function placeErr(st, x, z) {
-  const ground = surfaceAt(x, z), openFloor = BLOCK.every(b => !inRect(b, x, z, .1)) && Math.abs(x) <= 2.4 && z >= -2.6 && z <= 3.6 && Math.hypot(x - STAND.x, z - STAND.z) >= .8;
+function placeErr(st, x, z, yHint = 999) {
+  const ground = surfaceAt(x, z, yHint), openFloor = BLOCK.every(b => !inRect(b, x, z, .1)) && Math.abs(x) <= 2.4 && z >= -2.6 && z <= 3.6 && Math.hypot(x - STAND.x, z - STAND.z) >= .8;
   if (st.type === 'trash') { if (ground > 0 || !openFloor) return 'The trash can needs open floor'; }
   else if (ground <= 0 && st.type === 'crate') { if (!openFloor) return 'The crate needs open floor'; }
   else if (ground <= 0) return 'That needs a table or counter';
   const y = ground + st.dy;
-  if (stations.some(o => o !== st && o.active !== false && o.type !== 'seat' && o.type !== 'vent' && o.type !== 'window' && Math.abs(o.mesh.position.x - x) < .4 && Math.abs(o.mesh.position.z - z) < .4 && Math.abs(o.mesh.position.y - y) < .5)) return 'Too close to something else';
+  if (stations.some(o => o !== st && o.active !== false && o.type !== 'seat' && o.type !== 'vent' && o.type !== 'window' && Math.abs(o.mesh.position.x - x) < .45 && Math.abs(o.mesh.position.z - z) < .45 && Math.abs(o.mesh.position.y - y) < .25)) return 'Too close to something else';
   return null;
 }
-function tryPlaceStation(st, x, z) {
-  const e = placeErr(st, x, z); if (e) return setupFail(e);
-  st.mesh.position.set(x, surfaceAt(x, z) + st.dy, z); return true;
+function tryPlaceStation(st, x, z, yHint = 999) {
+  const e = placeErr(st, x, z, yHint); if (e) return setupFail(e);
+  st.mesh.position.set(x, surfaceAt(x, z, yHint) + st.dy, z); return true;
 }
 function glow(c, hex) { c.mesh.traverse(o => { if (o.material && o.material.emissive) o.material.emissive.setHex(hex); }); }
 function clearCarry(p) {
@@ -626,7 +685,7 @@ function setupClick() {
   const c = p.carry, x = snap5(hit.point.x), z = snap5(hit.point.z);
   if (c === island) { if (tryMoveIsland(x, z)) { clearCarry(p); toast('Placed'); } return; }
   if (c.shelf) { if (shelfErr(c, x, z, mod4(c.rot + p.crot)) ? setupFail(shelfErr(c, x, z, mod4(c.rot + p.crot))) : (moveShelf(c, x, z, c.rot + p.crot), true)) { p.crot = 0; clearCarry(p); toast('Placed'); } return; }
-  if (tryPlaceStation(c, x, z)) { c.mesh.rotation.y -= (p.crot || 0) * Math.PI / 2; setStationRot(c, (c.rotA || 0) + (p.crot || 0)); p.crot = 0; clearCarry(p); toast('Placed'); }
+  if (tryPlaceStation(c, x, z, hit.point.y)) { c.mesh.rotation.y -= (p.crot || 0) * Math.PI / 2; setStationRot(c, (c.rotA || 0) + (p.crot || 0)); p.crot = 0; clearCarry(p); toast('Placed'); }
 }
 
 // ---- splatters: items left on the floor turn into a mess that must be scrubbed ----
@@ -769,7 +828,8 @@ function dropHeld(point) {
   const it = player.held; if (!it) return;
   player.held = null; it.held = false;
   const p = point || new THREE.Vector3(player.x - Math.sin(player.yaw) * .6, 1.0, player.z - Math.cos(player.yaw) * .6);
-  it.pos.set(clamp(p.x, -XB, XB), p.y + .02, clamp(p.z, ZMIN, ZMAX)); it.vel.set(0, 0, 0);
+  const yHint = p.y;
+  it.pos.set(clamp(p.x, -XB, XB), surfaceAt(p.x, p.z, yHint) + .02, clamp(p.z, ZMIN, ZMAX)); it.vel.set(0, 0, 0);
 }
 function throwHeld() {
   const it = player.held; if (!it) return;
@@ -844,11 +904,11 @@ function stepItems(dt, pax, paz) {
   const mu = (1.05 + .3 * U('counter')) * 1;
   for (const it of items) {
     if (it.held || it.loc !== 'free') continue;
-    const ground = surfaceAt(it.pos.x, it.pos.z), v = it.vel;
+    const ground = surfaceAt(it.pos.x, it.pos.z, it.pos.y + .1), v = it.vel;
     if (it.pos.y > ground + .002 || v.y > 0) {
       v.y -= 9.8 * dt; it.pos.y += v.y * dt;
       it.pos.x += v.x * dt; it.pos.z += v.z * dt;
-      const g2 = surfaceAt(it.pos.x, it.pos.z);
+      const g2 = surfaceAt(it.pos.x, it.pos.z, it.pos.y + .1);
       if (it.pos.y <= g2) { it.pos.y = g2; if (v.y < -2) { v.x *= .4; v.z *= .4; } v.y = 0; v.x *= .5; v.z *= .5; }
     } else {
       it.pos.y = ground;
@@ -862,7 +922,7 @@ function stepItems(dt, pax, paz) {
           const s2 = Math.hypot(v.x, v.z), dec = lim * .85 * dt;
           if (s2 > 0) { const k = Math.max(0, s2 - dec) / s2; v.x *= k; v.z *= k; }
         }
-        const nx = it.pos.x + v.x * dt, nz = it.pos.z + v.z * dt, ng = surfaceAt(nx, nz);
+        const nx = it.pos.x + v.x * dt, nz = it.pos.z + v.z * dt, ng = surfaceAt(nx, nz, it.pos.y + .1);
         if (onCounter && ng < ground - .01 && Math.hypot(v.x, v.z) < .8 + .8 * U('latch')) { v.x *= -.3; v.z *= -.3; }
         else { it.pos.x = nx; it.pos.z = nz; }
       }
@@ -1871,19 +1931,19 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;back
     const _get = getLayout; getLayout = () => { const l = _get(); l.s.forEach((p, i) => { if (p && stations[i].type === 'oven') p.push(+stations[i].mesh.position.y.toFixed(3)); }); return l; };
     const _apply = applyLayout; applyLayout = l => { _apply(l); if (l && Array.isArray(l.s)) l.s.forEach((p, i) => { const s = stations[i]; if (s && s.type === 'oven' && p && Number.isFinite(p[3])) s.mesh.position.y = p[3]; }); };
     const _pe = placeErr;
-    placeErr = (st, x, z) => {
-      if (st.type !== 'oven') return _pe(st, x, z);
-      const g = surfaceAt(x, z); if (g <= 0) return 'Ovens need a table or counter';
+    placeErr = (st, x, z, yHint) => {
+      if (st.type !== 'oven') return _pe(st, x, z, yHint);
+      const g = surfaceAt(x, z, yHint); if (g <= 0) return 'Ovens need a table or counter';
       const below = ovens().filter(o => o !== st && near(o, x, z)).length; if (below >= 3) return 'Ovens stack at most 3 high';
       if (ovens().some(o => o !== st && !near(o, x, z) && Math.abs(o.mesh.position.x - x) < .52 && Math.abs(o.mesh.position.z - z) < .52)) return 'Too close to another oven';
       if (stations.some(o => o.type !== 'oven' && o.active !== false && !['seat', 'vent', 'window'].includes(o.type) && Math.abs(o.mesh.position.x - x) < .4 && Math.abs(o.mesh.position.z - z) < .4 && Math.abs(o.mesh.position.y - (g + st.dy)) < .5)) return 'Too close to something else';
       return null;
     };
     const _tp = tryPlaceStation;
-    tryPlaceStation = (st, x, z) => {
-      if (st.type !== 'oven') return _tp(st, x, z);
-      const e = placeErr(st, x, z); if (e) return setupFail(e);
-      st.mesh.position.set(x, surfaceAt(x, z) + st.dy + ovens().filter(o => o !== st && near(o, x, z)).length * OH, z); return true;
+    tryPlaceStation = (st, x, z, yHint) => {
+      if (st.type !== 'oven') return _tp(st, x, z, yHint);
+      const e = placeErr(st, x, z, yHint); if (e) return setupFail(e);
+      st.mesh.position.set(x, surfaceAt(x, z, yHint) + st.dy + ovens().filter(o => o !== st && near(o, x, z)).length * OH, z); return true;
     };
     const settle = () => { // close gaps when an oven is moved out of the middle of a stack
       const list = ovens(), done = new Set();
@@ -2029,8 +2089,262 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;back
   }, 50);
   });
 })();
+// ===== POLISH PACK 2: tilt fix, order payouts, drink patience, real pizza-truck menu model =====
+// Paste this whole block directly ABOVE the line:  // ---- boot: apply saved layout and start ----
+(() => {
+  const safe = (n, f) => { try { f(); } catch (e) { console.error('[polish2] ' + n + ' failed:', e); } };
 
+  // 1) Tilt fix: the menu's camera.lookAt leaves a roll angle behind, and the kitchen camera kept re-using it.
+  safe('tilt', () => {
+    const _sp = stepPlayer;
+    stepPlayer = dt => { _sp(dt); camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ'); };
+  });
+
+  // 2) Show what each order will pay (pizza pay shrinks as patience drains; drink adds $6)
+  safe('orderpay', () => {
+    const css = document.createElement('style');
+    css.textContent = '#orders .pay{float:right;margin-left:8px;line-height:1.2;background:#1f5a2d;color:#9dffb2;border:1px solid #6bd36b66;border-radius:8px;padding:0 7px;font-weight:700;font-size:13px}';
+    document.head.appendChild(css);
+    const pizzaPay = o => o.pd ? 0 : Math.round(14 + 4 * o.tops.length + 10 * Math.max(0, o.patience) / o.max);
+    const drinkPay = o => o.dr && !o.gd ? 6 : 0;
+    const _ro = renderOrders;
+    renderOrders = () => {
+      _ro();
+      document.querySelectorAll('#orders .up').forEach((el, i) => {
+        const o = cook.orders[i]; if (!o) return;
+        el.insertAdjacentHTML('afterbegin', '<span class="pay" title="pizza $' + pizzaPay(o) + (o.dr ? ' + drink $' + drinkPay(o) : '') + '">$' + (pizzaPay(o) + drinkPay(o)) + '</span>');
+      });
+    };
+  });
+
+  // 3) Serving a customer their drink adds patience
+  safe('drinkpatience', () => {
+    const BONUS = 30;   // seconds added (capped at the order's max patience)
+    const _w = stationActs.window;
+    stationActs.window = (...a) => {
+      const h = player.held, o = h && h.type === 'drink' && cook.orders.find(q => q.dr && !q.gd);
+      const r = _w(...a);
+      if (o && o.gd) { o.patience = Math.min(o.max, o.patience + BONUS); toast('Patience +' + BONUS + 's for #' + o.id + ' (drink +$6)'); renderOrders(); }
+      return r;
+    };
+  });
+
+  // 4) A proper pizza-truck model for the menu
+  safe('truckmodel', () => {
+    while (extTruck.children.length) extTruck.remove(extTruck.children[0]);
+    const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: o.r ?? .65, metalness: o.m ?? 0, emissive: o.e ?? 0, emissiveIntensity: o.ei ?? 1, transparent: !!o.a, opacity: o.a ?? 1 });
+    const B = (w, h, d, x, y, z, c, o = {}) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), M(c, o)); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; (o.p || extTruck).add(m); return m; };
+    const Cy = (r, h, x, y, z, c, o = {}) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, o.s || 20), M(c, o)); m.position.set(x, y, z); if (!o.up) m.rotation.z = Math.PI / 2; m.castShadow = true; (o.p || extTruck).add(m); return m; };
+    const tex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; };
+    const label = (t, pw, ph, x, y, z, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), new THREE.MeshBasicMaterial({ map: t, transparent: true, toneMapped: false })); m.position.set(x, y, z); m.rotation.y = ry; extTruck.add(m); };
+    const RED = 0xd9381e, CREAM = 0xf4ead2, CHROME = { m: .85, r: .25 }, BW = 2.4, Z0 = -1.4;
+
+    // chassis + body (two-tone) + roof
+    B(2 * BW - .2, .4, 10, 0, .75, .2, 0x2b2d33);
+    B(2 * BW, 1.0, 6.8, 0, 1.45, Z0, RED); B(2 * BW + .04, .12, 6.84, 0, 1.95, Z0, 0xb02a1d);
+    B(2 * BW, 1.8, 6.8, 0, 2.85, Z0, CREAM); B(2 * BW + .3, .12, 7.1, 0, 3.81, Z0, CREAM);
+    // cab + hood + windshield + side windows
+    B(2 * BW, 2.0, 1.8, 0, 1.95, 2.9, RED); B(2 * BW + .1, .1, 1.9, 0, 3.0, 2.9, CREAM); B(2 * BW, .95, 1.4, 0, 1.425, 4.5, RED);
+    B(4.4, .95, .06, 0, 2.4, 3.9, 0x9fd0ff, { a: .75, r: .1, m: .2 }).rotation.x = -.35;
+    [-1, 1].forEach(s => {
+      B(.05, .85, 1.2, s * (BW + .02), 2.45, 2.85, 0x9fd0ff, { a: .75, r: .1 }); B(.06, .06, .22, s * (BW + .04), 2.0, 3.3, 0xcfd4dc, CHROME);
+      B(.5, .06, .06, s * (BW + .2), 2.45, 3.4, 0x222222); B(.12, .42, .26, s * (BW + .45), 2.45, 3.4, 0x222222);
+      const hl = new THREE.Mesh(new THREE.SphereGeometry(.28, 12, 8), M(0xfff6d0, { e: 0xffe9a0, ei: 1.2 })); hl.scale.z = .6; hl.position.set(s * 1.8, 1.5, 5.2); extTruck.add(hl);
+      B(.3, .25, .05, s * 2.0, 1.4, -4.83, 0xff2222, { e: 0xaa0000 });
+      // wheels: tyre, chrome hub, black wheel arch on the body
+      [-2.8, 3.6].forEach(z => { Cy(.8, .55, s * (BW + .28), .8, z, 0x1b1c1f, { r: .9 }); Cy(.42, .6, s * (BW + .28), .8, z, 0xcfd4dc, CHROME); Cy(1.0, .05, s * (BW + .005), .8, z, 0x111114, { s: 24 }); });
+    });
+    // grille, bumpers
+    B(3.2, .55, .05, 0, 1.35, 5.22, 0x222222); [-1.2, -.6, 0, .6, 1.2].forEach(x => B(.07, .5, .06, x, 1.35, 5.25, 0xcfd4dc, CHROME));
+    B(2 * BW + .6, .28, .4, 0, .75, 5.3, 0xcfd4dc, CHROME); B(2 * BW + .6, .28, .3, 0, .75, -4.95, 0xcfd4dc, CHROME);
+
+    // serving window (+X side): recess, red frame, yellow ledge, striped awning with string lights
+    B(.06, .85, 3.0, BW + .01, 2.6, Z0, 0x2a1d14); B(.1, .09, 3.2, BW + .03, 3.07, Z0, RED);
+    [-1, 1].forEach(s => B(.1, .95, .09, BW + .03, 2.6, Z0 + s * 1.55, RED)); B(.45, .07, 3.1, BW + .22, 2.12, Z0, 0xffcf4a);
+    const aw = new THREE.Group(); aw.position.set(BW, 3.2, Z0); aw.rotation.z = -.5; extTruck.add(aw);
+    for (let i = 0; i < 8; i++) {
+      const z = (i - 3.5) * .4, c = i % 2 ? CREAM : RED;
+      B(1.2, .06, .4, .6, 0, z, c, { p: aw }); B(.06, .2, .4, 1.2, -.1, z, c, { p: aw });
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(.06, 8, 6), M(0xfff0b0, { e: 0xffe08a, ei: 1.6 })); bulb.position.set(1.22, -.23, z); aw.add(bulb);
+    }
+    // painted signs on both sides
+    label(tex(512, 96, (g, w, h) => { g.font = '900 84px Fredoka, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#d9381e'; g.fillText('PIZZA', w / 2, h / 2 + 4); }), 3.4, .64, BW + .015, 3.55, Z0, Math.PI / 2);
+    label(tex(512, 160, (g, w, h) => { g.fillStyle = '#d9381e'; g.beginPath(); if (g.roundRect) g.roundRect(6, 6, w - 12, h - 12, 28); else g.rect(6, 6, w - 12, h - 12); g.fill(); g.font = '900 80px Fredoka, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#f4ead2'; g.fillText('\u{1F355} PIZZA', w / 2, h / 2 + 4); }), 4.6, 1.44, -BW - .015, 2.85, Z0, -Math.PI / 2);
+
+    // giant roof pizza on posts + chimney vent
+    [-1, 1].forEach(s => B(.18, .65, .18, 0, 4.2, Z0 + s, 0x555a66));
+    const pz = new THREE.Group(); pz.position.set(0, 5.35, Z0); extTruck.add(pz);
+    Cy(1.4, .24, 0, 0, 0, 0xd9a441, { p: pz, s: 36 }); Cy(1.2, .27, 0, 0, 0, 0xf5c542, { p: pz, s: 36, e: 0x553300, ei: .25 });
+    for (let k = 0; k < 3; k++) B(.31, .03, 2.3, 0, 0, 0, 0xb8860b, { p: pz }).rotation.x = k * Math.PI / 3;
+    [[0, 0]].concat([0, 1, 2, 3, 4, 5].map(k => [Math.sin(k * 1.047) * .7, Math.cos(k * 1.047) * .7])).forEach(([dy, dz]) => Cy(.2, .31, 0, dy, dz, 0xc0392b, { p: pz, s: 14 }));
+    Cy(.25, .9, -1.5, 4.25, -3.4, 0x8a8f99, { up: true, m: .6 }); Cy(.32, .08, -1.5, 4.72, -3.4, 0x555a66, { up: true });
+  });
+})();//polish js 2 end
+// ===== POLISH PACK 3: crate pick-up, 2-stage oven bars, boxed-pizza info, pizza patience =====
+// Paste this whole block directly ABOVE the line:  // ---- boot: apply saved layout and start ----
+// (put it after polish2 if you already pasted that)
+(() => {
+  const safe = (n, f) => { try { f(); } catch (e) { console.error('[polish3] ' + n + ' failed:', e); } };
+
+  // 1) Spring crates: left-click = pick the crate up (click again to put it down), right-click = take an item out
+  safe('cratecarry', () => {
+    const _ra = runAct;
+    runAct = (p, k) => as(p, () => {
+      const layout = G.mode === 'setup' || (G.mode === 'drive' && p.rearr);
+      if (!layout && (G.mode === 'cook' || G.mode === 'drive')) {
+        if (p.carry && p.carry.type === 'crate') {
+          if (k === 'use') { setupClick(); if (!p.carry) { save.layout = getLayout(); persist(); } return; }
+          if (k === 'throw') { clearCarry(p); toast('Cancelled'); return; }
+        } else if (!p.carry && !p.held && (k === 'use' || k === 'throw')) {
+          const hit = lookTarget(), st = hit && hit.st;
+          if (st && st.type === 'crate') {
+            if (k === 'use') {
+              if (players.some(q => q.carry === st)) toast('Someone else is carrying that');
+              else { p.carry = st; p.crot = 0; glow(st, 0x665500); toast('Picked up the crate. Click where to put it. Right-click cancels'); }
+            } else if (st.items.length) holdItem(st.items.pop()); else toast('Crate is empty');
+            return;
+          }
+        }
+      }
+      _ra(p, k);
+    });
+    const _tf = tipFor;
+    tipFor = hit => {
+      if (player.carry && G.mode !== 'setup' && !(G.mode === 'drive' && player.rearr)) return 'Click a spot to put the crate down. Right-click cancels.';
+      const st = hit && hit.st;
+      if (st && st.type === 'crate') return player.held ? 'Click to stow the item inside the crate. Press G to empty it.' : 'Left-click: pick up the crate. Right-click: take an item out. G: empty it.';
+      return _tf(hit);
+    };
+    for (const k of ['cook', 'drive', 'driveMP']) if (HELP[k]) HELP[k] = HELP[k].replace('Press G to empty a crate.', 'Crates: left-click picks one up (click again to put it down), right-click takes an item out, G empties it.');
+  });
+
+  // 2) Oven overlay: one bar for raw -> cooked, a second one for cooked -> burnt
+  safe('ovenbars', () => {
+    const ov = $('#ovenOverlay'); if (!ov) return;
+    const bar = (id, col) => '<div style="width:90px;height:8px;background:#333;border-radius:4px;overflow:hidden"><div id="' + id + '" style="height:100%;width:0%;background:' + col + ';transition:width .1s linear"></div></div>';
+    const lab = (t, mt) => '<div style="font-size:10px;color:#cdbfe6;text-align:left;margin-top:' + mt + 'px">' + t + '</div>';
+    ov.innerHTML = '<div style="font-size:12px;font-weight:700;color:#fff">Oven</div>' + lab('Raw \u2192 Cooked', 2) + bar('ovenBarFill', '#ffaa33') + lab('Cooked \u2192 Burnt', 4) + bar('ovenBar2Fill', '#ffd23f');
+    const _up = updatePrompt;
+    updatePrompt = () => {
+      _up();
+      if (ov.style.display === 'none') return;
+      const hit = lookTarget(), o = hit && hit.st && hit.st.type === 'oven' && oven[hit.st.slot]; if (!o) return;
+      const b = o.d.bake, burnAt = 1.1 + .15 * U('burn'), p1 = clamp(b / .6, 0, 1), p2 = clamp((b - .6) / (burnAt - .6), 0, 1);
+      const f1 = $('#ovenBarFill'), f2 = $('#ovenBar2Fill');
+      f1.style.width = p1 * 100 + '%'; f1.style.background = p1 >= 1 ? '#44ff77' : '#ffaa33';
+      f2.style.width = p2 * 100 + '%'; f2.style.background = p2 > .75 ? '#ff3b30' : p2 > .4 ? '#ff9a33' : '#ffd23f';
+    };
+  });
+
+  // 3) Hover a boxed pizza to see what is inside (also shown while holding it)
+  safe('boxinfo', () => {
+    const el = document.createElement('div'); el.id = 'boxOverlay';
+    el.style.cssText = 'position:absolute;display:none;background:#000c;border:2px solid #ffcf4a;border-radius:8px;padding:6px 10px;pointer-events:none;transform:translate(-50%,-120%);z-index:10;font-size:12px;text-align:center;min-width:110px;max-width:200px';
+    $('#game').appendChild(el);
+    const names = d => [d.sauce && 'sauce', d.cheese && 'cheese', ...d.tops].filter(Boolean);
+    const _up = updatePrompt;
+    updatePrompt = () => {
+      _up(); el.style.display = 'none';
+      const h = player.held; if (h && h.type === 'pizza' && h.d.boxed) $('#heldTxt').textContent = 'Holding: boxed pizza (' + (h.d.tops.join(' + ') || 'plain') + ')';
+      const hit = lookTarget(), it = hit && hit.item;
+      if (!it || it.type !== 'pizza' || !it.d.boxed) return;
+      camera.updateMatrixWorld();
+      const p = projectToScreen(new THREE.Vector3(it.pos.x, it.pos.y + .2, it.pos.z)); if (!p.visible) return;
+      const q = it.d.q, qc = q === 'good' ? '#6bd36b' : q === 'burnt' ? '#ff6b5a' : '#ffaa33', qt = q === 'good' ? 'Golden' : q === 'burnt' ? 'Burnt' : 'Raw';
+      el.innerHTML = '<div style="font-weight:700;color:#ffcf4a;margin-bottom:3px">Boxed pizza</div>' + names(it.d).join('<br>') + '<div style="margin-top:3px;font-weight:700;color:' + qc + '">' + qt + '</div>';
+      el.style.left = p.x + 'px'; el.style.top = p.y + 'px'; el.style.display = 'block';
+    };
+  });
+
+  // 4) Serving the pizza to a customer who still waits on a drink adds patience too
+  safe('pizzapatience', () => {
+    const BONUS = 30, _w = stationActs.window;
+    stationActs.window = (...a) => {
+      const r = _w(...a);
+      for (const o of cook.orders) if (o.pd && o.dr && !o.gd && !o.pb) {
+        o.pb = true; o.patience = Math.min(o.max, o.patience + BONUS);
+        toast('Patience +' + BONUS + 's for #' + o.id + ' (pizza served, drink still to come)'); renderOrders();
+      }
+      return r;
+    };
+  });
+})();//polish js 3 end
+// ===== POLISH PACK 4: clean menu, counts on crates/ingredients, green/red placement hologram =====
+// Paste this whole block directly ABOVE the line:  // ---- boot: apply saved layout and start ----
+// (after polish2 / polish3 if you pasted those)
+(() => {
+  const safe = (n, f) => { try { f(); } catch (e) { console.error('[polish4] ' + n + ' failed:', e); } };
+
+  // 1) No leftover in-game HUD (orders, tips, "Hands empty", overlays) on the home page / lobby
+  safe('menuhud', () => {
+    const hide = () => {
+      $('#game').classList.remove('on'); $('#topbar').classList.remove('on'); $('#bigTimer').style.display = 'none';
+      ['#toast', '#mirrorFrame', '#ovenOverlay', '#crateOverlay', '#boxOverlay'].forEach(s => { const e = $(s); if (e) e.style.display = 'none'; });
+    };
+    const _e = modes.menu.enter; modes.menu.enter = () => { _e(); hide(); };
+    hide();
+  });
+
+  // 2) Counts after names: crate fill (3/8) and ingredient uses left (4/5)
+  safe('counts', () => {
+    const maxUses = () => 5 + U('uses'), isIng = it => it && (it.type === 'jar' || it.type === 'cheese' || it.type === 'topbox');
+    const _up = updatePrompt;
+    const step = () => {
+      const hit = lookTarget(), st = hit && hit.st, it = hit && hit.item, pr = $('#prompt');
+      if (st && st.type === 'crate' && st.label) {
+        const tag = ' (' + st.items.length + '/' + crateCap() + ')';
+        pr.textContent = pr.textContent.replace(st.label, st.label + tag);
+        const ov = $('#crateOverlay'); if (ov.style.display === 'block' && ov.firstElementChild) ov.firstElementChild.textContent = 'Spring Crate' + tag;
+      } else if (st && st.type === 'pantry' && st.label) pr.textContent = pr.textContent.replace(st.label, st.label + ' (' + maxUses() + ' uses each)');
+      else if (isIng(it) && !player.held) pr.textContent = pr.textContent.replace('Grab ' + itemName(it), 'Grab ' + itemName(it) + ' (' + it.uses + '/' + maxUses() + ')');
+      if (isIng(player.held)) $('#heldTxt').textContent += ' (' + player.held.uses + '/' + maxUses() + ')';
+    };    let broken = false;
+    updatePrompt = () => { _up(); if (broken) return; try { step(); } catch (e) { broken = true; console.error('[polish4] counts disabled:', e); } };
+  });
+
+  // 3) Placement hologram while carrying a station / shelf / the middle table / a crate: green = ok, red = blocked
+  safe('hologram', () => {
+    const OK = 0x2bff7a, BAD = 0xff3b3b, OH = .24;
+    const gm = new THREE.MeshBasicMaterial({ color: OK, transparent: true, opacity: .4, depthWrite: false });
+    let ghost = null, ghostFor = null;
+    const drop = () => { if (ghost) { truck.remove(ghost); ghost = null; ghostFor = null; } };
+    const near = (o, x, z) => Math.abs(o.mesh.position.x - x) < .2 && Math.abs(o.mesh.position.z - z) < .2;
+    const _up = updatePrompt;
+    const step = () => {
+      const c = player.carry;
+      if (!c) { drop(); return; }
+      const hit = lookTarget();
+      if (!hit || !hit.point) { if (ghost) ghost.visible = false; return; }
+      if (ghostFor !== c) {
+        drop(); const src = c.shelf ? c.g : c.mesh, saved = [];
+        // Object3D.clone() JSON-copies userData, which is circular on stations (userData.st.mesh.userData.st...) and throws
+        src.traverse(o => { saved.push([o, o.userData]); o.userData = {}; });
+        try { ghost = src.clone(true); } finally { saved.forEach(([o, u]) => { o.userData = u; }); }
+        ghostFor = c; ghost.visible = true;
+        ghost.traverse(o => { if (o.isMesh) { o.material = gm; o.castShadow = false; o.receiveShadow = false; } });
+        truck.add(ghost);
+      }
+      const x = snap5(hit.point.x), z = snap5(hit.point.z); let err = null, y = 0;
+      if (c === island) {
+        const hw = (island.s.x1 - island.s.x0) / 2, hd = (island.s.z1 - island.s.z0) / 2;
+        if (z - hd < -2.6 || BLOCK.some(b => b !== island.b && x + hw + .55 > b.x0 && x - hw - .55 < b.x1 && z + hd + .55 > b.z0 && z - hd - .55 < b.z1)) err = 'Too close to a wall or counter: keep a walkway clear';
+        else if (stations.some(s => s.type === 'trash' && inRect({ x0: x - hw, x1: x + hw, z0: z - hd, z1: z + hd }, s.mesh.position.x, s.mesh.position.z, .3))) err = 'Move the trash can out of the way first';
+        y = c.mesh.position.y; ghost.rotation.set(0, 0, 0);
+      } else if (c.shelf) { err = shelfErr(c, x, z, mod4(c.rot + (player.crot || 0))); ghost.rotation.y = c.g.rotation.y; }
+      else {
+        err = placeErr(c, x, z, hit.point.y);
+        y = surfaceAt(x, z, hit.point.y) + c.dy + (c.type === 'oven' ? stations.filter(o => o !== c && o.type === 'oven' && near(o, x, z)).length * OH : 0);
+        ghost.rotation.y = c.mesh.rotation.y;
+      }
+      ghost.position.set(x, y, z); ghost.visible = true;
+      gm.color.setHex(err ? BAD : OK); gm.opacity = .32 + .1 * Math.sin(performance.now() / 150);
+      const tip = $('#tip'); if (err && tip.style.display !== 'none') tip.textContent = 'Cannot place here: ' + err;
+    };    let broken = false;
+    updatePrompt = () => { _up(); if (broken) return; try { step(); } catch (e) { broken = true; drop(); console.error('[polish4] hologram disabled:', e); } };
+  });
+})();//polish 4 js end
 // ---- boot: apply saved layout and start ----
+
 if (save.layout) applyLayout(save.layout);
 applyOwned(); fixExtras();
 setMode('menu');
