@@ -2498,6 +2498,100 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;back
     };
   });
 })();//polishj5 end
+// ===== POLISH PACK 6: VIP customers + slowed by splatters =====
+// Paste this whole block directly ABOVE the line:  // ---- boot: apply saved layout and start ----
+// (after the earlier blocks)
+(() => {
+  const safe = (n, f) => { try { f(); } catch (e) { console.error('[polish6] ' + n + ' failed:', e); } };
+  const VIP_CHANCE = .2;      // chance a new customer is a VIP (max one VIP at a time)
+  const VIP_PAY = 2;          // VIPs pay this many times more (pizza and drink)
+  const VIP_PATIENCE = .6;    // VIPs wait only this fraction of the normal time
+  const SLOW = .45;           // walking speed while slowed
+  const SLOW_SECONDS = 2;     // how long the slowdown lasts after stepping in a splatter
+
+  safe('vip', () => {
+    const css = document.createElement('style');
+    css.textContent = '#orders .up.vip{border-left-color:#ffd23f;background:linear-gradient(#5a4310,#3a2a08);box-shadow:0 0 12px #ffd23f88}#orders .vipTag{display:inline-block;margin-right:6px;color:#ffd23f;font-weight:800;font-size:12px}';
+    document.head.appendChild(css);
+
+    // new customers: sometimes a VIP (shorter patience)
+    const _no = newOrder;
+    newOrder = () => {
+      _no();
+      const o = cook.orders[cook.orders.length - 1];
+      if (o && !cook.orders.some(q => q !== o && q.vip) && Math.random() < VIP_CHANCE) {
+        o.vip = true; o.max = Math.round(o.max * VIP_PATIENCE); o.patience = o.max;
+        toast('VIP customer #' + o.id + ' pays ' + VIP_PAY + 'x but will not wait long!');
+      }
+    };
+
+    // VIPs pay extra on whatever was just served to them
+    const _w = stationActs.window;
+    stationActs.window = (...a) => {
+      const orders = cook.orders.slice(), snap = orders.map(o => [o.pd, o.gd]), before = G.runMoney;
+      const r = _w(...a);
+      orders.forEach((o, i) => {
+        if (!o.vip || (o.pd === snap[i][0] && o.gd === snap[i][1])) return;
+        const extra = Math.round((G.runMoney - before) * (VIP_PAY - 1));
+        if (extra > 0) { G.runMoney += extra; G.earned += extra; toast('VIP #' + o.id + ' paid ' + VIP_PAY + 'x! +$' + (G.runMoney - before)); }
+      });
+      return r;
+    };
+
+    // order card: gold card + VIP tag, and the pay pill (if you have polish2) shows the VIP amount
+    const _ro = renderOrders;
+    renderOrders = () => {
+      _ro();
+      document.querySelectorAll('#orders .up').forEach((el, i) => {
+        const o = cook.orders[i]; if (!o || !o.vip) return;
+        el.classList.add('vip'); el.insertAdjacentHTML('afterbegin', '<span class="vipTag">\u2B50 VIP</span>');
+        const p = el.querySelector('.pay'); if (p) { const n = parseInt(p.textContent.replace('$', ''), 10); if (n >= 0) p.textContent = '$' + n * VIP_PAY; }
+      });
+    };
+
+    // online games: send the VIP flag to clients
+    const _sn = snapshot;
+    snapshot = () => { const s = _sn(); if (s.ck && s.ck.o) s.ck.o.forEach((q, i) => { if (cook.orders[i] && cook.orders[i].vip) q.vip = 1; }); return s; };
+
+    // VIP customers wear a crown and a dark suit
+    const COL = [0x3366aa, 0xaa3355, 0x33aa66, 0xaa9933];
+    const gold = new THREE.MeshStandardMaterial({ color: 0xffd23f, metalness: .7, roughness: .3, emissive: 0x553a00 });
+    const mkCrown = () => {
+      const c = new THREE.Group(); c.add(new THREE.Mesh(new THREE.CylinderGeometry(.15, .13, .1, 10), gold));
+      for (let k = 0; k < 5; k++) { const a = k * 1.2566, s = new THREE.Mesh(new THREE.ConeGeometry(.04, .12, 6), gold); s.position.set(Math.cos(a) * .13, .1, Math.sin(a) * .13); c.add(s); }
+      c.position.y = 1.27; return c;
+    };
+    const _sf = syncFigs;
+    syncFigs = () => {
+      _sf();
+      cook.figs.forEach((f, i) => {
+        const want = !!(cook.orders[i] && cook.orders[i].vip), body = f.children[0];
+        if (want && !f.userData.crown) { f.userData.crown = mkCrown(); f.add(f.userData.crown); }
+        else if (!want && f.userData.crown) { f.remove(f.userData.crown); f.userData.crown = null; }
+        if (body && body.material) body.material.color.setHex(want ? 0x1a1a22 : COL[i % 4]);
+      });
+    };
+  });
+
+  // Stepping in a splatter slows you down for a couple of seconds (works for every player, host or client)
+  safe('slow', () => {
+    const tag = document.createElement('div');
+    tag.style.cssText = 'position:absolute;left:50%;bottom:52px;transform:translateX(-50%);background:#5a3b12cc;border:1px solid #c98a3a;border-radius:14px;padding:3px 12px;font-weight:700;display:none';
+    $('#game').appendChild(tag);
+    let slowT = 0;
+    const _sp = stepPlayer;
+    stepPlayer = dt => {
+      if (!player.seated) {
+        for (const q of splats) {
+          const r = .35 * (.45 + .55 * q.hp / 3) + .12;
+          if (Math.hypot(player.x - q.x, player.z - q.z) < r) { if (slowT <= 0) showToast('You stepped in a mess! Slowed for ' + SLOW_SECONDS + 's'); slowT = SLOW_SECONDS; break; }
+        }
+      }
+      if (slowT > 0) { slowT -= dt; tag.style.display = 'block'; tag.textContent = '\u{1F40C} Slowed ' + Math.max(0, slowT).toFixed(1) + 's'; } else tag.style.display = 'none';
+      _sp(slowT > 0 ? dt * SLOW : dt);
+    };
+  });
+})();//end of polish js6
 // ---- boot: apply saved layout and start ----
 
 if (save.layout) applyLayout(save.layout);
