@@ -2343,6 +2343,161 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;back
     updatePrompt = () => { _up(); if (broken) return; try { step(); } catch (e) { broken = true; drop(); console.error('[polish4] hologram disabled:', e); } };
   });
 })();//polish 4 js end
+// ===== POLISH PACK 5: better bumps, real floor while driving, road during cooking, steam overhaul, item collisions =====
+// Paste this whole block directly ABOVE the line:  // ---- boot: apply saved layout and start ----
+// (after polish2/3/4 if you pasted those)
+(() => {
+  const safe = (n, f) => { try { f(); } catch (e) { console.error('[polish5] ' + n + ' failed:', e); } };
+  let heat = 0, heatC = 0;              // engine heat (host) / heat as received by a client
+  const HEAT_LIMIT = 3, HEAT_DECAY = .12, STEAM_SECONDS = 5;
+
+  // 1) Layering: the road used to sit ABOVE the kitchen floor, so it covered the floor while driving.
+  //    Everything outside now sits below the floor (floor top = 0), and the ground drops while the road is shown.
+  safe('layers', () => {
+    roadMat.position.y = -.16;                                           // road top = -0.14
+    roadMat.children.forEach(c => { if (Math.abs(c.position.x) > 8) c.position.y -= .02; });
+    dashes.forEach(d => { d.scale.y = 2; d.position.y = -.11; });
+    const _sf = syncFigs; syncFigs = () => { _sf(); cook.figs.forEach(f => { f.position.y = -.14; }); };   // customers stand on the road
+  });
+
+  // 2) Nicer road hazards (all lower than the floor, so they never poke into the kitchen)
+  safe('hazards', () => {
+    const stripes = (() => { const c = document.createElement('canvas'); c.width = 8; c.height = 224; const g = c.getContext('2d'); for (let i = 0; i < 14; i++) { g.fillStyle = i % 2 ? '#1a1a1a' : '#f6c21a'; g.fillRect(0, i * 16, 8, 16); } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+    const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: o.r ?? .9, emissive: o.e ?? 0 });
+    makeObstacleMesh = (pothole, x) => {
+      const g = new THREE.Group(); g.userData.w = pothole ? 2.2 : 7;
+      if (pothole) {
+        const rim = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.35, .03, 24), M(0x2a2a30)); rim.position.y = .015; g.add(rim);
+        const hole = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, .045, 24), M(0x050507)); hole.position.y = .03; g.add(hole);
+        const deep = new THREE.Mesh(new THREE.CylinderGeometry(.62, .62, .05, 20), M(0x000000)); deep.position.set(.12, .035, -.06); g.add(deep);
+        for (let k = 0; k < 7; k++) {   // cracks radiating out + loose gravel
+          const a = k * .9 + .3, cr = new THREE.Mesh(new THREE.BoxGeometry(.05, .02, .45 + (k % 3) * .2), M(0x15151a));
+          cr.position.set(Math.cos(a) * 1.3, .035, Math.sin(a) * 1.3); cr.rotation.y = -a; g.add(cr);
+          const st = new THREE.Mesh(new THREE.BoxGeometry(.12, .05, .1), M(0x6b6b72)); st.position.set(Math.cos(a + .4) * 1.15, .045, Math.sin(a + .4) * 1.15); st.rotation.y = a; g.add(st);
+        }
+      } else {
+        // striped half-cylinder, 13 cm high: reads as a proper speed hump from the driver's seat
+        const bump = new THREE.Mesh(new THREE.CylinderGeometry(.6, .6, 7, 20, 1, false, 0, Math.PI), new THREE.MeshStandardMaterial({ map: stripes, roughness: .55, emissive: 0x3a2c00 }));
+        bump.rotation.z = Math.PI / 2; bump.scale.set(.217, 1, 1); bump.castShadow = true; g.add(bump);
+      }
+      g.position.set(x, -.14, -90); obsGroup.add(g); return g;
+    };
+  });
+
+  // 3) The road is visible while making pizzas too (and hidden again on the menu)
+  safe('roadcook', () => {
+    const showRoad = () => { roadMat.visible = true; dashes.forEach(d => { d.visible = true; }); applyScroll(0, 0); };
+    for (const m of ['setup', 'cook']) { const _e = modes[m].enter; modes[m].enter = () => { _e(); showRoad(); }; }
+    const _ce = clientEnter; clientEnter = mode => { _ce(mode); if (mode === 'cook' || mode === 'setup') showRoad(); };
+    const _me = modes.menu.enter; modes.menu.enter = () => { _me(); roadMat.visible = false; dashes.forEach(d => { d.visible = false; }); };
+  });
+
+  // 4) Heat / steam rules: too many bumps overheat the engine; steam that runs out ruins one item as a floor splatter
+  safe('steamrules', () => {
+    const _bi = bumpItems; bumpItems = power => { _bi(power); if (G.mode === 'drive' && net.role !== 'client') heat += power / 2; };
+    const ruinOne = () => {
+      const live = items.filter(i => !i.held && (i.loc === 'free' || i.loc === 'crate'));
+      if (!live.length) { toast('The steam cleared without ruining anything'); return; }
+      const it = live[Math.floor(Math.random() * live.length)], cr = it.loc === 'crate' ? stations.find(s => s.items && s.items.includes(it)) : null;
+      let x = cr ? cr.mesh.position.x : it.pos.x, z = cr ? cr.mesh.position.z : it.pos.z;
+      if (blocked(x, z)) search: for (let r = .1; r < 4; r += .1) for (let a = 0; a < 6.28; a += .4) { const nx = x + Math.cos(a) * r, nz = z + Math.sin(a) * r; if (!blocked(nx, nz)) { x = nx; z = nz; break search; } }
+      const what = it.type === 'pizza' ? (it.d.boxed ? 'boxed pizza' : 'pizza') : itemName(it);
+      if (splats.length >= 40) removeSplat(splats[0]);
+      makeSplat(++splatId, x, z, itemColor(it)); removeItem(it); drive.lost++;
+      toast('Steam ruined the ' + what + '! It splattered on the floor');
+    };
+    const _de = modes.drive.enter; modes.drive.enter = () => { heat = 0; _de(); };
+    const _du = modes.drive.update;
+    modes.drive.update = dt => {
+      if (!drive.done) {
+        drive.steamT = 1e9;                                   // no more random steam: only bumps cause it
+        heat = Math.max(0, heat - HEAT_DECAY * dt);
+        if (heat >= HEAT_LIMIT && drive.steam <= 0) { heat = 0; drive.steam = STEAM_SECONDS; toast('Engine steam! Too many bumps. Vent it at the red lever'); }
+        if (drive.steam > 0 && drive.steam - dt <= 0) { drive.steam = 0; ruinOne(); }
+      }
+      _du(dt);
+    };
+    const _sn = snapshot; snapshot = () => { const s = _sn(); s.dr.heat = +heat.toFixed(2); return s; };
+    const _ap = applySnapshot; applySnapshot = s => { _ap(s); heatC = (s.dr && s.dr.heat) || 0; };
+  });
+
+  // 5) Obvious steam: flashing banner, white fog on screen, billowing puffs from the dash, pulsing lever, heat gauge
+  safe('steamfx', () => {
+    const css = document.createElement('style');
+    css.textContent = '#steamFog{position:fixed;inset:0;pointer-events:none;z-index:3;display:none;background:radial-gradient(ellipse at 50% 55%,rgba(255,255,255,.06) 30%,rgba(235,240,245,.6) 100%);animation:stmP .6s ease-in-out infinite alternate}@keyframes stmP{from{opacity:.55}to{opacity:1}}'
+      + '#steamBanner{position:absolute;left:10px;top:6px;display:none;max-width:330px;color:#fff;background:linear-gradient(#ff3b30,#b3150c);border:3px solid #fff;border-radius:12px;padding:8px 14px;font-weight:800;font-size:20px;line-height:1.2;text-shadow:0 2px 0 #7a0c06;box-shadow:0 0 24px #ff3b30aa;animation:stmF .45s steps(2) infinite}@keyframes stmF{50%{background:linear-gradient(#ffd23f,#e08a00);color:#3a1d00;text-shadow:none}}';
+    document.head.appendChild(css);
+    const fog = document.createElement('div'); fog.id = 'steamFog'; document.body.appendChild(fog);
+    const banner = document.createElement('div'); banner.id = 'steamBanner'; banner.innerHTML = '\u26A0 ENGINE STEAM!<br>Pull the red lever <span id="steamSec"></span>s'; $('#game').appendChild(banner);
+    const hw = document.createElement('div'); hw.innerHTML = '<div style="font-size:12px;margin-top:4px">Engine heat</div><div style="height:8px;width:150px;background:#000;margin:2px 0 0 auto;border-radius:4px;overflow:hidden"><div id="heatFill" style="height:8px;width:0;background:#ffd23f"></div></div>'; $('#driveHud').appendChild(hw);
+    const puff = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 2, 32, 32, 30); gr.addColorStop(0, 'rgba(255,255,255,.9)'); gr.addColorStop(.5, 'rgba(235,240,245,.45)'); gr.addColorStop(1, 'rgba(235,240,245,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+    const vent = stations.find(s => s.type === 'vent'), parts = []; let acc = 0, last = performance.now(), wasSteam = false;
+    const spawn = () => {
+      if (parts.length > 140) return; const lever = Math.random() < .35;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: puff, transparent: true, depthWrite: false, opacity: 0 }));
+      sp.position.set(lever ? 1.5 + rand(-.25, .25) : rand(-2.3, 2.3), lever ? 1.3 : rand(.95, 1.2), -4.55 + rand(0, .2)); truck.add(sp);
+      parts.push({ sp, vx: rand(-.2, .2), vy: rand(.5, 1), vz: rand(.25, .8), age: 0, life: rand(1.3, 2.1) });
+    };
+    const tick = () => {
+      const now = performance.now(), dt = Math.min(.05, (now - last) / 1000); last = now;
+      const low = G.mode === 'drive' || G.mode === 'cook' || G.mode === 'setup';          // ground sits under the road whenever it is shown
+      ground.position.y = low ? -.19 : -.02; deco.position.y = low ? -.19 : 0;
+      const driving = G.mode === 'drive', steaming = driving && drive.steam > 0;
+      fog.style.display = banner.style.display = steaming ? 'block' : 'none';
+      if (steaming) { $('#steamSec').textContent = Math.ceil(drive.steam); acc += dt * 45; while (acc >= 1) { spawn(); acc--; } }
+      if (vent && (steaming || wasSteam)) { glow(vent, steaming ? (Math.sin(now / 90) > 0 ? 0xff2200 : 0x440000) : 0); vent.mesh.scale.setScalar(steaming ? 1.35 : 1); }
+      wasSteam = steaming;
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const q = parts[i]; q.age += dt; const k = q.age / q.life;
+        if (k >= 1 || !driving) { truck.remove(q.sp); q.sp.material.dispose(); parts.splice(i, 1); continue; }
+        q.sp.position.x += q.vx * dt; q.sp.position.y += q.vy * dt; q.sp.position.z += q.vz * dt;
+        q.sp.scale.setScalar(.5 + 1.4 * k); q.sp.material.opacity = Math.min(1, k * 6) * (1 - k) * .75;
+      }
+      if (driving) { const h = net.role === 'client' ? heatC : heat, f = $('#heatFill'); f.style.width = Math.min(100, h / HEAT_LIMIT * 100) + '%'; f.style.background = h > 2.2 ? '#ff3b30' : h > 1.2 ? '#ff9a33' : '#ffd23f'; }
+    };
+    const _r = renderer.render; renderer.render = (s, c) => { if (c === camera) tick(); return _r.call(renderer, s, c); };
+  });
+
+  // 6) Loose items are solid: they stop at boards, boxes, bins, ovens, crates... and land on top instead of clipping in
+  safe('collide', () => {
+    const SKIP = ['window', 'vent', 'seat'], R = it => it.type === 'pizza' ? .1 : .07;
+    const solids = () => stations.filter(s => s.active !== false && s.mesh.visible !== false && !SKIP.includes(s.type));
+    const bounds = st => {
+      const m = st.mesh, p = m.position, key = p.x + ',' + p.y + ',' + p.z + ',' + m.rotation.y + ',' + m.scale.x;
+      if (!st._cb || st._ck !== key) { st._cb = new THREE.Box3().setFromObject(m); st._ck = key; }
+      return st._cb;
+    };
+    const collide = dt => {
+      const free = items.filter(i => !i.held && i.loc === 'free');
+      for (let a = 0; a < free.length; a++) for (let b = a + 1; b < free.length; b++) {          // items vs items
+        const A = free[a], B = free[b]; if (Math.abs(A.pos.y - B.pos.y) > .12) continue;
+        const dx = B.pos.x - A.pos.x, dz = B.pos.z - A.pos.z, d = Math.hypot(dx, dz), min = R(A) + R(B);
+        if (d > 1e-4 && d < min) { const k = (min - d) / 2 / d; A.pos.x -= dx * k; A.pos.z -= dz * k; B.pos.x += dx * k; B.pos.z += dz * k; } else if (d <= 1e-4) B.pos.x += .02;
+      }
+      const sol = solids();
+      for (const it of free) {                                                                     // items vs stations
+        const r = R(it), v = it.vel; let top = null;
+        for (const st of sol) {
+          const bb = bounds(st), x = it.pos.x, z = it.pos.z, y = it.pos.y;
+          if (x < bb.min.x - r || x > bb.max.x + r || z < bb.min.z - r || z > bb.max.z + r) continue;
+          if (y + .1 < bb.min.y + .01 || y > bb.max.y + .001) continue;
+          if ((it._py ?? y) >= bb.max.y - .02) { if (x >= bb.min.x && x <= bb.max.x && z >= bb.min.z && z <= bb.max.z && (top === null || bb.max.y > top)) top = bb.max.y; continue; }
+          const dl = x - (bb.min.x - r), dr = bb.max.x + r - x, df = z - (bb.min.z - r), db = bb.max.z + r - z, m = Math.min(dl, dr, df, db);
+          if (m === dl) { it.pos.x = bb.min.x - r; v.x = -Math.abs(v.x) * .2; } else if (m === dr) { it.pos.x = bb.max.x + r; v.x = Math.abs(v.x) * .2; }
+          else if (m === df) { it.pos.z = bb.min.z - r; v.z = -Math.abs(v.z) * .2; } else { it.pos.z = bb.max.z + r; v.z = Math.abs(v.z) * .2; }
+        }
+        if (top !== null) { it.pos.y = top; if (v.y < 0) v.y = 0; const f = Math.max(0, 1 - 8 * dt); v.x *= f; v.z *= f; }
+        it._py = it.pos.y;
+      }
+    };
+    const _si = stepItems; stepItems = (dt, pax, paz) => { _si(dt, pax, paz); collide(dt); };
+    const _dh = dropHeld;                                           // clicking a station top while holding an item drops it ON the station
+    dropHeld = point => {
+      const it = player.held; _dh(point);
+      if (it && point) for (const st of solids()) { const bb = bounds(st); if (point.x >= bb.min.x && point.x <= bb.max.x && point.z >= bb.min.z && point.z <= bb.max.z && Math.abs(point.y - bb.max.y) < .06) { it.pos.y = bb.max.y + .01; it._py = it.pos.y; break; } }
+    };
+  });
+})();//polishj5 end
 // ---- boot: apply saved layout and start ----
 
 if (save.layout) applyLayout(save.layout);
