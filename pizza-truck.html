@@ -2854,6 +2854,38 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;back
     };
   });
 })();//end of polish js 8
+// ===== POLISH PACK 9: joined players see their carried item + placement hologram =====
+(() => {
+  const safe = (n, f) => { try { f(); } catch (e) { console.error('[polish9] ' + n + ' failed:', e); } };
+  safe('carrysync', () => {
+    const desc = c => !c ? null : c === island ? ['i'] : c.shelf ? ['h', SHELVES.indexOf(c)] : ['s', stations.indexOf(c)];
+    const resolve = d => !d ? null : d[0] === 'i' ? island : d[0] === 'h' ? SHELVES[d[1]] : stations[d[1]];
+    const rotObj = c => c.shelf ? c.g : c.mesh;
+
+    // host: tell everyone what each player is carrying and how far they turned it
+    const _sn = snapshot;
+    snapshot = () => {
+      const s = _sn();
+      s.pl.forEach((q, i) => { const p = players[i]; if (p && p.carry) { q.cy = desc(p.carry); q.cr = p.crot || 0; } });
+      return s;
+    };
+
+    // client: remember the carried item so the hologram, tips and glow work
+    const undo = p => { if (p._ro && p._rc) rotObj(p._rc).rotation.y -= p._ro * Math.PI / 2; p._ro = 0; };
+    const _ap = applySnapshot;
+    applySnapshot = s => {
+      [me, ...pmap.values()].forEach(undo);          // take back last frame's preview turn before the layout is applied
+      _ap(s);
+      for (const q of s.pl) {
+        const p = q.i === me.id ? me : pmap.get(q.i); if (!p) continue;
+        const c = resolve(q.cy);
+        if (p._rc !== c) { if (p._rc) glow(p._rc, 0); if (c) glow(c, 0x665500); p._rc = c; }
+        p.carry = c; p.crot = c ? (q.cr || 0) : 0;
+        if (c && c !== island && p.crot) { rotObj(c).rotation.y += p.crot * Math.PI / 2; p._ro = p.crot; }
+      }
+    };
+  });
+})();//end of polish js 9
 // ---- boot: apply saved layout and start ----
 
 if (save.layout) applyLayout(save.layout);
