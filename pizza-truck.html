@@ -2593,67 +2593,48 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;back
   });
 })();//end of polish js 6
 
-// ===== POLISH PACK 7: hard mode, sink, cloth for splatters, hand-washing before each stop / drive =====
+// ===== POLISH PACK 7 (v3): Easy / Normal / Hard. Hard adds the sink, hand-washing, cloth for splatters and a cloth rack =====
 // Paste this whole block directly ABOVE the line:  // ---- boot: apply saved layout and start ----
-// (after the earlier blocks)
+// (replace any older polish7 block with this one)
 (() => {
   const safe = (n, f) => { try { f(); } catch (e) { console.error('[polish7] ' + n + ' failed:', e); } };
-  const HANDS_CLICKS = 3;        // clicks on the sink to wash your hands
-  const CLOTH_CLICKS = 2;        // clicks on the sink to wash the cloth
-  const CLOTH_MAX = 4;           // cloth gets too dirty after this many scrubs (one splatter = 3)
-  const HARD_RATE = 1.6;         // hard mode: customers arrive this much faster
-  const HARD_MAX = 6;            // hard mode: customers waiting at once (normal is 4)
-  const HARD_PATIENCE = .85;     // hard mode: patience multiplier
-  const HARD_PAY = 1.25;         // hard mode: pay multiplier (set 1 for no bonus)
+  // A wrapper that throws is switched off for good (and logged); the previous behaviour is used instead.
+  const guard = (orig, fn, name) => { let bad = false; return (...a) => { if (!bad) { try { return fn(...a); } catch (e) { bad = true; console.error('[polish7] ' + name + ' disabled:', e); } } return orig(...a); }; };
+  const O = { newOrder, updateTop, snapshot, applySnapshot, runAct, interact, tipFor, updatePrompt, makeItemMesh, updatePizzaMesh, tickFloorItems, cookU: modes.cook.update, driveU: modes.drive.update, win: stationActs.window, crate: stationActs.crate };
 
-  let released = true, releasedC = true, washedC = 0, totalC = 1, sink = null, hardOn = false;
+  // ---- tuning ----
+  const HANDS_CLICKS = 3, CLOTH_CLICKS = 2, CLOTH_MAX = 4;                                    // hard: sink clicks, cloth wash clicks, scrubs before the cloth is too dirty
+  const EASY_PATIENCE = 1.6, EASY_MAX = 2, EASY_STEAM = .5, EASY_BURN = .5, EASY_PAY = 1;     // easy: patience x, customers at once, steam countdown speed, burn speed, pay x
+  const HARD_RATE = 1.6, HARD_MAX = 6, HARD_PATIENCE = .85, HARD_PAY = 1.25;                  // hard: arrival speed x, customers at once, patience x, pay x
+
+  let diff = 'normal', diffC = 'normal', released = true, releasedC = true, washedC = 0, totalC = 1, sink = null, rack = null;
+  const D = () => net.role === 'client' ? diffC : diff, isHard = () => D() === 'hard', isEasy = () => D() === 'easy';
   const gateActive = () => (G.mode === 'cook' || G.mode === 'drive') && !(net.role === 'client' ? releasedC : released);
   const say = m => { showToast(m); if (net.role === 'host') net.broadcast({ t: 'toast', m }); };
+  const clothColor = d => new THREE.Color(0xdbe9f7).lerp(new THREE.Color(0x6b5a3f), Math.min(1, (d || 0) / CLOTH_MAX));
+  const syncStations = () => { [sink, rack].forEach(s => { if (s) setActive(s, isHard()); }); };       // sink + rack exist in hard mode only
+  const slowBurn = dt => oven.forEach(o => { if (o && o.d.bake >= .6) o.d.bake -= dt * ovenSpeed() * (1 - EASY_BURN); });
+  const updateRack = () => { if (!rack) return; rack.clothMesh.visible = !!rack.cloth; if (rack.cloth) rack.clothMesh.material.color.copy(clothColor(rack.cloth.dirt)); };
+  const provision = () => { items.filter(i => i.type === 'cloth').forEach(removeItem); if (rack) { rack.cloth = { dirt: 0, wash: 0 }; updateRack(); } };   // fresh cloth on the rack
 
-  // ---------- Hard mode: toggle on the menu, bigger and faster orders ----------
-  safe('hard', () => {
-    try { hardOn = localStorage.getItem('pizzatruck_hard') === '1'; } catch {}
-    const btn = document.createElement('button'); btn.id = 'bHard'; btn.className = 'alt';
-    const paint = () => { btn.textContent = 'Difficulty: ' + (hardOn ? 'HARD' : 'Normal'); };
-    btn.onclick = () => { hardOn = !hardOn; try { localStorage.setItem('pizzatruck_hard', hardOn ? '1' : '0'); } catch {} paint(); };
-    paint(); $('#menu').insertBefore(btn, $('#bPlay'));
-
-    const _no = newOrder;                                   // bigger orders: 2-4 toppings, more drinks, a bit less patience
-    newOrder = () => {
-      _no(); if (!hardOn) return;
-      const o = cook.orders[cook.orders.length - 1]; if (!o) return;
-      o.tops = Object.keys(TOPCOL).sort(() => Math.random() - .5).slice(0, 2 + Math.floor(Math.random() * 3)).sort();
-      o.dr = G.stopIndex >= 1 && Math.random() < .85; o.max = Math.round(o.max * HARD_PATIENCE); o.patience = o.max;
-    };
-    const _cu = modes.cook.update;                          // faster arrivals and up to HARD_MAX waiting customers
-    modes.cook.update = dt => {
-      if (!hardOn || gateActive()) return _cu(dt);
-      const L = loc(); cook.next -= dt * (HARD_RATE - 1);
-      if (cook.next <= 0 && cook.orders.length >= 4 && cook.orders.length < HARD_MAX) { newOrder(); syncFigs(); cook.next = rand(L.rate * .7, L.rate * 1.3) / HARD_RATE; }
-      const n = cook.orders.length; _cu(dt);
-      if (cook.orders.length > n) cook.next /= HARD_RATE;
-    };
-    const _w = stationActs.window;                          // hard mode pays more
-    stationActs.window = (...a) => {
-      const before = G.runMoney, r = _w(...a);
-      if (hardOn && net.role !== 'client' && G.runMoney > before) { const x = Math.round((G.runMoney - before) * (HARD_PAY - 1)); G.runMoney += x; G.earned += x; }
-      return r;
-    };
-    const _ut = updateTop;
-    updateTop = (mode, info) => _ut(hardOn && net.role !== 'client' && (G.mode === 'cook' || G.mode === 'drive') && !mode.includes('[HARD]') ? mode + ' [HARD]' : mode, info);
-  });
-
-  // ---------- Sink (middle of the kitchen, on the island table; movable in set-up) ----------
-  safe('sink', () => {
+  // ---------- Sink + cloth rack (island table; movable in set-up) ----------
+  safe('stations', () => {
     const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: o.r ?? .5, metalness: o.m ?? 0 });
     const add = (p, w, h, d, x, y, z, c, o) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), M(c, o)); m.position.set(x, y, z); m.castShadow = true; p.add(m); return m; };
-    const g = new THREE.Group(), steel = { m: .8, r: .3 };
-    add(g, .46, .16, .4, 0, .08, 0, 0xbfc5cf, steel); add(g, .38, .01, .32, 0, .165, 0, 0x5ba7d9, { r: .1 }); add(g, .46, .24, .03, 0, .28, .19, 0xbfc5cf, steel);
-    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(.018, .018, .3, 10), M(0xd7dbe2, { m: .9, r: .2 })); pipe.position.set(0, .31, .14); g.add(pipe);
-    const spout = new THREE.Mesh(new THREE.CylinderGeometry(.014, .014, .17, 10), M(0xd7dbe2, { m: .9, r: .2 })); spout.rotation.x = Math.PI / 2; spout.position.set(0, .45, .06); g.add(spout);
-    add(g, .04, .03, .04, .07, .47, .14, 0xe8452c);
-    sink = addStation('sink', g, 0, .9, -.6, { label: 'Sink (wash hands / cloth)', dy: 0 });
-    MOVABLE.push('sink'); DEF_LAYOUT.s[stations.indexOf(sink)] = [0, -.6, 0];
+    const steel = { m: .8, r: .3 }, chrome = { m: .9, r: .2 };
+    const gs = new THREE.Group();
+    add(gs, .46, .16, .4, 0, .08, 0, 0xbfc5cf, steel); add(gs, .38, .01, .32, 0, .165, 0, 0x5ba7d9, { r: .1 }); add(gs, .46, .24, .03, 0, .28, .19, 0xbfc5cf, steel); add(gs, .04, .03, .04, .07, .47, .14, 0xe8452c);
+    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(.018, .018, .3, 10), M(0xd7dbe2, chrome)); pipe.position.set(0, .31, .14); gs.add(pipe);
+    const spout = new THREE.Mesh(new THREE.CylinderGeometry(.014, .014, .17, 10), M(0xd7dbe2, chrome)); spout.rotation.x = Math.PI / 2; spout.position.set(0, .45, .06); gs.add(spout);
+    sink = addStation('sink', gs, 0, .9, -.6, { label: 'Sink (wash hands / cloth)', dy: 0 });
+
+    const gr = new THREE.Group();
+    add(gr, .36, .03, .2, 0, .015, 0, 0x7a5a3a); [-1, 1].forEach(s => add(gr, .03, .42, .03, s * .15, .24, 0, 0x7a5a3a));
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(.014, .014, .34, 10), M(0xd7dbe2, chrome)); bar.rotation.z = Math.PI / 2; bar.position.y = .42; gr.add(bar);
+    const cl = new THREE.Mesh(new THREE.BoxGeometry(.2, .2, .012), M(0xdbe9f7, { r: .9 })); cl.position.set(0, .3, 0); gr.add(cl);
+    rack = addStation('rack', gr, .55, .9, -1.15, { label: 'Cloth rack', dy: 0, cloth: null, clothMesh: cl });
+    MOVABLE.push('sink', 'rack'); DEF_LAYOUT.s[stations.indexOf(sink)] = [0, -.6, 0]; DEF_LAYOUT.s[stations.indexOf(rack)] = [.55, -1.15, 0];
+    updateRack();
 
     stationActs.sink = () => {
       const p = player, h = p.held;
@@ -2671,11 +2652,22 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;back
       if (!released && players.every(q => q.clean)) { released = true; say('Everyone is clean. Get cooking!'); }
       return true;
     };
+    stationActs.rack = () => {
+      const h = player.held;
+      if (h && h.type === 'cloth') {
+        if (rack.cloth) { toast('The rack already has a cloth'); return true; }
+        rack.cloth = { dirt: h.d.dirt, wash: 0 }; removeItem(h); updateRack(); toast('Hung the cloth back on the rack'); return true;
+      }
+      if (h) { toast('Hands must be empty to take the cloth'); return true; }
+      if (!rack.cloth) { toast('No cloth on the rack. A fresh one arrives next stop'); return true; }
+      const it = spawnItem('cloth', 0, 0, { d: { dirt: rack.cloth.dirt, wash: 0 } }); rack.cloth = null; holdItem(it); updateRack(); return true;
+    };
+    syncStations();
   });
 
-  // ---------- Cloth: needed to wipe up splatters, gets dirty, wash it in the sink ----------
+  // ---------- Cloth item + splatter cleaning (hard mode only; other modes scrub by hand as before) ----------
   safe('cloth', () => {
-    const tint = (g, d) => { const c = new THREE.Color(0xdbe9f7).lerp(new THREE.Color(0x6b5a3f), Math.min(1, (d || 0) / CLOTH_MAX)); g.children.forEach(m => m.material.color.copy(c)); };
+    const tint = (g, d) => { const c = clothColor(d); g.children.forEach(m => m.material.color.copy(c)); };
     const _mi = makeItemMesh;
     makeItemMesh = it => {
       if (it.type !== 'cloth') return _mi(it);
@@ -2685,18 +2677,15 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;back
     };
     const _up = updatePizzaMesh; updatePizzaMesh = (it, g = it.mesh) => it.type === 'cloth' ? tint(g, it.d.dirt) : _up(it, g);
     const _tf = tickFloorItems; tickFloorItems = dt => { items.forEach(i => { if (i.type === 'cloth') i.onFloor = false; }); _tf(dt); };   // a dropped cloth never becomes a splatter
-    const _cr = stationActs.crate; stationActs.crate = (...a) => { if (player.held && player.held.type === 'cloth') { toast('Leave the cloth by the sink'); return true; } return _cr(...a); };
-    setInterval(() => {   // always keep one cloth around (host only; clients receive it in snapshots)
-      if (net.role === 'client' || !sink || !(G.mode === 'cook' || G.mode === 'drive' || G.mode === 'setup') || items.some(i => i.type === 'cloth')) return;
-      spawnItem('cloth', sink.mesh.position.x, sink.mesh.position.z, { y: sink.mesh.position.y + .3, d: { dirt: 0, wash: 0 } });
-    }, 600);
+    const _cr = stationActs.crate; stationActs.crate = (...a) => { if (player.held && player.held.type === 'cloth') { toast('Hang the cloth on the rack instead'); return true; } return _cr(...a); };
+    const _se = modes.setup.enter; modes.setup.enter = () => { _se(); if (isHard()) provision(); };
 
     const _int = interact;
     interact = () => {
-      const hit = lookTarget();
+      const hit = isHard() && lookTarget();
       if (hit && hit.splat) {
         const h = player.held, sp = hit.splat;
-        if (!h || h.type !== 'cloth') { toast('You need a cloth to wipe this up (it is by the sink)'); return; }
+        if (!h || h.type !== 'cloth') { toast('You need a cloth to wipe this up (take it from the rack)'); return; }
         if (h.d.dirt >= CLOTH_MAX) { toast('The cloth is too dirty! Wash it in the sink'); return; }
         h.d.dirt++; updatePizzaMesh(h); sp.hp--;
         if (sp.hp <= 0) { removeSplat(sp); toast('Cleaned!'); } else { setSplatHp(sp); toast('Scrubbing ' + (3 - sp.hp) + '/3'); }
@@ -2706,9 +2695,11 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;back
     };
     const _tip = tipFor;
     tipFor = hit => {
+      if (!isHard()) return _tip(hit);
       const h = player.held, st = hit && hit.st, cl = h && h.type === 'cloth';
-      if (hit && hit.splat) return cl ? (h.d.dirt >= CLOTH_MAX ? 'The cloth is too dirty. Wash it in the sink.' : 'Click to wipe up the splatter (' + (3 - hit.splat.hp) + '/3).') : 'You need a cloth to clean this. Grab it by the sink.';
+      if (hit && hit.splat) return cl ? (h.d.dirt >= CLOTH_MAX ? 'The cloth is too dirty. Wash it in the sink.' : 'Click to wipe up the splatter (' + (3 - hit.splat.hp) + '/3).') : 'You need a cloth to clean this. Take it from the rack.';
       if (st && st.type === 'sink') return cl ? 'Click to wash the cloth.' : h ? 'Hands must be empty to wash them.' : player.clean ? 'Your hands are clean. Hold the cloth here to wash it.' : 'Click to wash your hands.';
+      if (st && st.type === 'rack') return cl ? 'Click to hang the cloth back.' : rack.cloth ? 'Click to take the cloth.' : 'The rack is empty until the next stop.';
       if (cl) return 'Click a splatter to wipe it up. Wash the cloth in the sink when it is dirty (' + h.d.dirt + '/' + CLOTH_MAX + ').';
       return _tip(hit);
     };
@@ -2720,10 +2711,48 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;back
     };
   });
 
-  // ---------- Hand-washing: everyone must wash before each stop starts and before the truck can drive ----------
+  // ---------- Difficulty: Easy / Normal / Hard ----------
+  safe('difficulty', () => {
+    try { const v = localStorage.getItem('pizzatruck_diff'); diff = ['easy', 'normal', 'hard'].includes(v) ? v : localStorage.getItem('pizzatruck_hard') === '1' ? 'hard' : 'normal'; } catch {}
+    const LABEL = { easy: 'Easy', normal: 'Normal', hard: 'HARD' }, btn = document.createElement('button'); btn.id = 'bHard'; btn.className = 'alt';
+    const paint = () => { btn.textContent = 'Difficulty: ' + LABEL[diff]; };
+    btn.onclick = e => { try { if (e) e.stopPropagation(); diff = diff === 'easy' ? 'normal' : diff === 'normal' ? 'hard' : 'easy'; paint(); syncStations(); localStorage.setItem('pizzatruck_diff', diff); } catch (err) { console.error('[polish7] difficulty button:', err); } };
+    paint(); $('#menu').insertBefore(btn, $('#bPlay')); syncStations();
+
+    const _no = newOrder;                                   // easy: longer patience. hard: bigger orders, more drinks, less patience
+    newOrder = () => {
+      _no(); const o = cook.orders[cook.orders.length - 1]; if (!o) return;
+      if (isEasy()) { o.max = Math.round(o.max * EASY_PATIENCE); o.patience = o.max; }
+      else if (isHard()) {
+        o.tops = Object.keys(TOPCOL).sort(() => Math.random() - .5).slice(0, 2 + Math.floor(Math.random() * 3)).sort();
+        o.dr = G.stopIndex >= 1 && Math.random() < .85; o.max = Math.round(o.max * HARD_PATIENCE); o.patience = o.max;
+      }
+    };
+    const _cu = modes.cook.update;
+    modes.cook.update = dt => {
+      if (isEasy()) { if (cook.orders.length >= EASY_MAX && cook.next < 1) cook.next = 1; slowBurn(dt); return _cu(dt); }       // only 2 customers at a time, pizzas burn slower
+      if (!isHard()) return _cu(dt);
+      const L = loc(); cook.next -= dt * (HARD_RATE - 1);                                                                          // hard: faster arrivals, up to 6 at once
+      if (cook.next <= 0 && cook.orders.length >= 4 && cook.orders.length < HARD_MAX) { newOrder(); syncFigs(); cook.next = rand(L.rate * .7, L.rate * 1.3) / HARD_RATE; }
+      const n = cook.orders.length; _cu(dt);
+      if (cook.orders.length > n) cook.next /= HARD_RATE;
+    };
+    const _du = modes.drive.update;                         // easy: steam countdown runs slower (more time to vent), burn slower
+    modes.drive.update = dt => { if (isEasy() && !drive.done) { slowBurn(dt); if (drive.steam > 0) drive.steam += dt * (1 - EASY_STEAM); } return _du(dt); };
+    const _w = stationActs.window;                          // pay multiplier
+    stationActs.window = (...a) => {
+      const before = G.runMoney, r = _w(...a), m = isHard() ? HARD_PAY : isEasy() ? EASY_PAY : 1;
+      if (m !== 1 && net.role !== 'client' && G.runMoney > before) { const x = Math.round((G.runMoney - before) * (m - 1)); G.runMoney += x; G.earned += x; }
+      return r;
+    };
+    const _ut = updateTop;
+    updateTop = (mode, info) => _ut(net.role !== 'client' && (G.mode === 'cook' || G.mode === 'drive') && diff !== 'normal' && !mode.includes('[') ? mode + (isHard() ? ' [HARD]' : ' [EASY]') : mode, info);
+  });
+
+  // ---------- Hand-washing (hard only): everyone must wash before each stop starts and before the truck can drive ----------
   safe('handwash', () => {
     const ARROWS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
-    for (const m of ['cook', 'drive']) { const _e = modes[m].enter; modes[m].enter = () => { _e(); released = false; players.forEach(p => { p.clean = false; p.wash = 0; }); }; }
+    for (const m of ['cook', 'drive']) { const _e = modes[m].enter; modes[m].enter = () => { _e(); released = !isHard(); players.forEach(p => { p.clean = !isHard(); p.wash = 0; }); if (isHard()) provision(); }; }
 
     const _ra = runAct;   // until everyone is clean the only thing anyone can use is the sink
     runAct = (p, k) => as(p, () => {
@@ -2748,9 +2777,13 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;back
       _du(dt); ARROWS.forEach((k, i) => { keys[k] = sv[i]; }); restore(b);
     };
 
-    const _sn = snapshot; snapshot = () => { const s = _sn(); s.gt = { r: released ? 1 : 0 }; s.pl.forEach((q, i) => { q.cl = players[i] && players[i].clean ? 1 : 0; }); return s; };
+    const _sn = snapshot;
+    snapshot = () => { const s = _sn(); s.df = diff; s.rk = rack && rack.cloth ? rack.cloth.dirt : -1; s.gt = { r: released ? 1 : 0 }; s.pl.forEach((q, i) => { q.cl = players[i] && players[i].clean ? 1 : 0; }); return s; };
     const _ap = applySnapshot;
-    applySnapshot = s => { _ap(s); releasedC = !(s.gt && !s.gt.r); const mine = s.pl.find(q => q.i === me.id); me.clean = !!(mine && mine.cl); washedC = s.pl.filter(q => q.cl).length; totalC = s.pl.length; };
+    applySnapshot = s => {
+      _ap(s); diffC = s.df || 'normal'; syncStations(); if (rack) { rack.cloth = s.rk >= 0 ? { dirt: s.rk, wash: 0 } : null; updateRack(); }
+      releasedC = !(s.gt && !s.gt.r); const mine = s.pl.find(q => q.i === me.id); me.clean = !!(mine && mine.cl); washedC = s.pl.filter(q => q.cl).length; totalC = s.pl.length;
+    };
 
     const b = document.createElement('div');
     b.style.cssText = 'position:absolute;left:10px;top:6px;display:none;max-width:320px;background:linear-gradient(#2a7fd4,#17508f);border:3px solid #fff;border-radius:12px;padding:8px 14px;font-weight:800;font-size:18px;line-height:1.25;box-shadow:0 0 22px #2a7fd4aa';
@@ -2758,16 +2791,26 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;back
     let glowed = false;
     const _r = renderer.render;
     renderer.render = (s, c) => {
-      if (c === camera) {
+      if (c === camera) try {
         const on = gateActive(), mine = !!me.clean, w = net.role === 'client' ? washedC : players.filter(p => p.clean).length, t = net.role === 'client' ? totalC : players.length;
         b.style.display = on ? 'block' : 'none';
         if (on) b.innerHTML = mine ? '\u2705 Hands clean<br><small>Waiting for the others (' + w + '/' + t + ')</small>' : '\u{1F9FC} Wash your hands at the sink!<br><small>(' + w + '/' + t + ' ready)</small>';
         const pulse = on && !mine;
         if (sink && (pulse || glowed)) glow(sink, pulse ? (Math.sin(performance.now() / 120) > 0 ? 0x1a6bff : 0x0a2a66) : 0);
         glowed = pulse;
-      }
+      } catch (e) { console.error('[polish7] hud:', e); }
       return _r.call(renderer, s, c);
     };
+  });
+
+  safe('guards', () => {
+    newOrder = guard(O.newOrder, newOrder, 'newOrder'); updateTop = guard(O.updateTop, updateTop, 'updateTop');
+    snapshot = guard(O.snapshot, snapshot, 'snapshot'); applySnapshot = guard(O.applySnapshot, applySnapshot, 'applySnapshot');
+    runAct = guard(O.runAct, runAct, 'runAct'); interact = guard(O.interact, interact, 'interact'); tipFor = guard(O.tipFor, tipFor, 'tipFor');
+    updatePrompt = guard(O.updatePrompt, updatePrompt, 'updatePrompt'); makeItemMesh = guard(O.makeItemMesh, makeItemMesh, 'makeItemMesh');
+    updatePizzaMesh = guard(O.updatePizzaMesh, updatePizzaMesh, 'updatePizzaMesh'); tickFloorItems = guard(O.tickFloorItems, tickFloorItems, 'tickFloorItems');
+    modes.cook.update = guard(O.cookU, modes.cook.update, 'cook.update'); modes.drive.update = guard(O.driveU, modes.drive.update, 'drive.update');
+    stationActs.window = guard(O.win, stationActs.window, 'window'); stationActs.crate = guard(O.crate, stationActs.crate, 'crate');
   });
 })();//end of polish js 7
 // ---- boot: apply saved layout and start ----
