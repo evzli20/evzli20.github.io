@@ -2813,6 +2813,47 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;back
     stationActs.window = guard(O.win, stationActs.window, 'window'); stationActs.crate = guard(O.crate, stationActs.crate, 'crate');
   });
 })();//end of polish js 7
+// ===== POLISH PACK 8: multiplayer avatar fix + lobby difficulty button =====
+(() => {
+  const safe = (n, f) => { try { f(); } catch (e) { console.error('[polish8] ' + n + ' failed:', e); } };
+
+  // 1) Seated players were drawn below the floor: lift them into the driver seat
+  safe('avatars', () => {
+    const _ua = net.updateAvatars;
+    net.updateAvatars = dt => {
+      _ua(dt);
+      for (const [p, g] of avatars) { g.position.y = p.seated ? .2 : 0; g.scale.y = p.seated ? .8 : 1; }
+    };
+  });
+
+  // 2) Joined players never switched the kitchen on (truck hidden, menu truck still shown)
+  safe('clientvis', () => {
+    const _ce = clientEnter;
+    clientEnter = mode => { _ce(mode); extTruck.visible = (mode === 'menu'); truck.visible = (mode !== 'menu'); };
+  });
+
+  // 3) Difficulty button in the lobby (host cycles it, joined players see it greyed out)
+  safe('lobbydiff', () => {
+    const hard = $('#bHard'); if (!hard) return;
+    const lb = document.createElement('button'); lb.id = 'bLbHard'; lb.className = 'alt';
+    $('#lobby').insertBefore(lb, $('#bLbStart'));
+    lb.onclick = e => { e.stopPropagation(); if (net.role === 'host') { hard.click(); broadcastLobby(); } };
+
+    const _b = net.broadcast;                       // send the host's difficulty with the lobby info
+    net.broadcast = m => _b(m && m.t === 'lobby' ? { ...m, df: hard.textContent } : m);
+
+    const _cm = clientMsg;                          // joined players remember it
+    clientMsg = m => { if (m && m.t === 'lobby') net.df = m.df; _cm(m); };
+
+    const _rl = renderLobby;
+    renderLobby = () => {
+      _rl();
+      const host = net.role === 'host';
+      lb.textContent = host ? hard.textContent : (net.df || 'Difficulty: Normal') + ' (host decides)';
+      lb.disabled = !host;
+    };
+  });
+})();//end of polish js 8
 // ---- boot: apply saved layout and start ----
 
 if (save.layout) applyLayout(save.layout);
