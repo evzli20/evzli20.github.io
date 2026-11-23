@@ -50,7 +50,7 @@ footer{border-top:1px solid var(--bd);padding:26px 0;text-align:center;color:var
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 20px;border-radius:99px;font-weight:700;z-index:9;opacity:0;pointer-events:none;transition:opacity .2s}
 .toast.show{opacity:1}
 .ord{padding:20px;margin-bottom:16px}
-.brand{height:44px;width:auto;border-radius:14px;display:block;box-shadow:0 6px 14px -4px var(--sh)}.emoji.ph{height:auto;aspect-ratio:1/1}.emoji img{width:100%;height:100%;object-fit:cover}.th{width:36px;height:36px;border-radius:10px;object-fit:cover;vertical-align:middle}
+.brand{height:44px;width:auto;border-radius:6px;display:block}.emoji.ph{height:auto;aspect-ratio:1/1}.emoji img{width:100%;height:100%;object-fit:cover}.th{width:36px;height:36px;border-radius:10px;object-fit:cover;vertical-align:middle}
 .det{display:grid;gap:26px}@media(min-width:850px){.det{grid-template-columns:1fr 1fr}}.bigimg{width:100%;border-radius:24px;display:block;box-shadow:0 10px 24px -6px var(--sh)}.lnk{color:inherit;text-decoration:none;display:block}.cartbar{position:fixed;left:0;right:0;margin:0 auto;width:max-content;max-width:94vw;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:8;padding:12px 24px;white-space:nowrap}.cartbar[hidden]{display:none}footer{margin-bottom:64px}
 .grid3.menu{--cw:clamp(150px,24vw,270px);grid-template-columns:repeat(auto-fill,var(--cw));justify-content:center;gap:clamp(10px,1.6vw,18px)}
 .menu .item h3{font-size:clamp(.95rem,1.5vw,1.1rem);line-height:1.2}
@@ -123,7 +123,7 @@ function home(){return `
 ${[["1","✨","Pick your brownies","Browse the menu and choose quantities — everything is baked to order in our home kitchen."],["2","⏰","Choose pickup or delivery","Reserve a pickup slot, or have us hand-deliver on a date and window that suits you."],["3","👛","Pay to confirm","FPX online banking or DuitNow QR — your order is only confirmed once payment lands."]].map(s=>`<div class="clay item"><div style="font-size:2rem;font-weight:800;float:right;opacity:.15">${s[0]}</div><div style="font-size:1.8rem">${s[1]}</div><h3>${s[2]}</h3><p class="mut" style="font-size:.9rem">${s[3]}</p></div>`).join("")}</div></section>
 <section id="menu"><div class="row" style="justify-content:space-between;margin-bottom:22px"><div><span class="pill" style="background:var(--sunl)">Fresh from the oven</span><h2>This week’s menu</h2></div><a class="btn" href="#menu">See the full menu →</a></div>
 <div class="grid3 menu">${MENU.slice(0,3).map(card).join("")}</div></section>
-<section><div class="clay" style="padding:40px;text-align:center"><div style="font-size:3rem">🧁</div><h2>Craving brownies? It’s one order away.</h2><p class="mut" style="margin:10px 0 20px">Order today, pick your time, pay online — your desserts are confirmed before you close the tab.</p><a class="btn pri big" href="#order">Order now →</a></div></section>`}
+<section><div class="clay" style="padding:40px;text-align:center;border-radius:10px"><img src="${IMG.logo}" alt="Bakes &amp; Bites (@bakesbitesmy)" style="height:56px;width:auto;margin:0 auto 14px;display:block;border-radius:6px"><h2>Craving brownies? It’s one order away.</h2><p class="mut" style="margin:10px 0 20px">Order today, pick your time, pay online — your desserts are confirmed before you close the tab.</p><a class="btn pri big" href="#order">Order now →</a></div></section>`}
 
 const DETAIL={
 salt:{long:"Our signature bake: a deep, fudgy dark-chocolate brownie with a glossy crackle top, finished with flaky sea salt so every bite balances bittersweet and salty. Baked to order and cut into generous squares.",ing:"Dark chocolate, butter, eggs, sugar, flour, cocoa, sea salt",keep:"3 days room temp · 7 days chilled"},
@@ -167,8 +167,7 @@ function card(i){return `<div class="clay item"><a class="lnk" href="#item-${i.i
 function order(){
 const s=sub(),fee=form.mode==="delivery"&&s?DELIVERY_FEE:0;
 return `<section><div class="row" style="justify-content:space-between"><h2>Your cart &amp; checkout</h2><a class="btn" href="#menu">+ Add more items</a></div><div class="two" style="margin-top:20px">
-<div><div class="clay item"><h3>1 · Choose brownies</h3>${MENU.map(i=>`<div class="row" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--bd)"><div>${thumb(i)} <b>${i.name}</b><div class="mut" style="font-size:.85rem">${rm(i.price)}</div></div><div class="qty"><button data-add="${i.id}" data-n="-1" aria-label="Less">−</button><b>${cart[i.id]||0}</b><button data-add="${i.id}" aria-label="More">+</button></div></div>`).join("")}</div>
-<div class="clay item" style="margin-top:18px"><h3>2 · Pickup or delivery</h3>
+<div><div class="clay item"><h3>Pickup or delivery</h3>
 <div class="seg" style="margin-top:10px"><button class="btn ${form.mode==="pickup"?"on":""}" data-mode="pickup">🏪 Pickup</button><button class="btn ${form.mode==="delivery"?"on":""}" data-mode="delivery">🚚 Delivery (+${rm(DELIVERY_FEE)})</button></div>
 <label>Date</label><input type="date" id="date" min="${minDate()}" value="${form.date}">
 <label>Time window</label><select id="slot">${SLOTS.map(t=>`<option ${t===form.slot?"selected":""}>${t}</option>`).join("")}</select>
